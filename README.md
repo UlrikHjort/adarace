@@ -30,9 +30,18 @@ All of it is the game itself with the AI driver at the wheel, made by
 
 ## Getting started
 
+**Download:** take the Linux package from [Releases](../../releases), unpack it and run
+`./adarace`; `README-FIRST.txt` says what it needs. Or build it yourself:
+
     make run
 
-Needs GNAT, gprbuild, GtkAda, libepoxy, PulseAudio and OpenGL 4.5.
+That needs GNAT, gprbuild, GtkAda, libepoxy and PulseAudio. `make check` says what is missing
+and how to install it. On Debian, Ubuntu and Mint:
+
+    sudo apt install gnat gprbuild libgtkada-dev libgtk-3-dev libepoxy-dev libpulse-dev pkg-config
+
+The game needs a graphics card with OpenGL 4.5. A Logitech G29 is found by itself, and the
+keyboard always works. `ffmpeg` is optional, for F9 recordings and the co-driver's voice.
 
 ## How this was made
 
@@ -218,8 +227,8 @@ AI's, so a good driver can beat them.
 
 ## Development
 
-`main` should always build and pass `make test`. Work happens on a branch per feature or
-fix (`feature/spoken-co-driver`, `fix/wiper-blade`), merged through a pull request.
+`main` should always build and pass `make test`, which GitHub checks on every pull request.
+Work happens on a branch per feature or fix. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Licence
 
