@@ -8,6 +8,8 @@
 
 package Audio is
 
+   type Engine_Kind is (V8, V10, Turbo_Four);
+
    type Voice is record
       Rpm   : Float := 0.0;
       Level : Float := 0.0;   --  0 .. 1 by distance
@@ -25,6 +27,10 @@ package Audio is
       Dirt     : Float := 0.0;    --  0 .. 1: grass, gravel
       Scrape   : Float := 0.0;    --  0 .. 1: along a barrier
       Inside   : Boolean := True; --  heard from the cockpit
+      Engine   : Engine_Kind := V8;
+      Rain     : Float := 0.0;    --  0 .. 1
+      Snowy    : Boolean := False; --  what is under the tyres is soft
+      Wipers   : Boolean := False;
       Master   : Float := 0.8;
       Others_V : Voice_List;
    end record;
@@ -42,6 +48,14 @@ package Audio is
 
    procedure Beep (High : Boolean);
    --  Start lights
+
+   procedure Start_Capture (File : String);
+   procedure Stop_Capture;
+   --  The mix into a raw file (16 bit, 44.1 kHz, stereo), at a fixed level
+   --  whatever the volume is set to
+
+   function Playing return Boolean;
+   --  There is a sound server, and the mixer is running
 
    function Peak return Float;
    --  The loudest sample of the last block, before the volume (a check)

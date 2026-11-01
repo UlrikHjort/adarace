@@ -60,6 +60,7 @@ package body App is
    use type Gdk.Types.Gdk_Key_Type;
    use type Renderer.Camera_Kind;
    use type Session.Mode_Kind;
+   use type Session.Weather_Kind;
 
    Window : Gtk.Window.Gtk_Window;
    Area   : GL_Area.Gtk_GL_Area;
@@ -646,6 +647,13 @@ package body App is
                  elsif F.On_Dirt then Float'Min (0.7, F.Speed / 25.0) else 0.0);
       P.Scrape := F.Scrape;
       P.Inside := Renderer.Listener_Inside (Options);
+      P.Engine := (case Session.Config.Kind is
+                      when Vehicle.Road_GT => Audio.V8,
+                      when Vehicle.Race_GT3 => Audio.V10,
+                      when Vehicle.Rally_4WD => Audio.Turbo_Four);
+      P.Rain := Track.Wet * (if Session.Config.Weather = Session.Rain then 1.0 else 0.0);
+      P.Snowy := Track.Snow > 0.5;
+      P.Wipers := Session.Config.Weather in Session.Rain | Session.Snowing;
       P.Master := (if In_Menu or else Sim_Loop.Paused then Volume * 0.15 else Volume);
       --  The nearest others
       for I in 2 .. Natural'Min (F.Count, 5) loop

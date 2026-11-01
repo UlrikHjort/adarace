@@ -97,7 +97,7 @@ physics. A lap with all four wheels off the track does not count.
 | | [ / ] | field of view |
 | Options | Esc | pause; then F5 / Square restarts, F10 / Circle goes to the menu |
 | | F11 | fullscreen |
-| | F9 | record a video, F9 again stops (saved in `~/Videos/AdaRace`, needs ffmpeg) |
+| | F9 | record a video with sound, F9 again stops (saved in `~/Videos/AdaRace`, needs ffmpeg) |
 
 In the menu the d-pad moves between rows and changes values, and X starts.
 Choices are remembered in `~/.adaracerc`.
