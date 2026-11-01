@@ -90,6 +90,7 @@ physics. A lap with all four wheels off the track does not count.
 | | G | ghost |
 | | H | panels |
 | | L | driving line |
+| | B | co-driver's voice |
 | Square | R | back on the track (the lap is lost; +15 s on a stage) |
 | + / - or dial | + / - | force feedback strength |
 | R3 (press again for the front) | W (hold) | look back |
@@ -158,6 +159,10 @@ about 5 km of gravel road through a forest, timed from the lights to the finish 
 - **Nordic R4:** four wheel drive with a centre differential and long-travel suspension.
 - **Co-driver:** arrows at the top of the screen, read from the road's shape: L/R, then
   1 (hairpin) to 6 (nearly flat), LONG, and crests. Next corner on the left.
+- **Spoken calls:** the same notes read out over the intercom ("right four long, over
+  crest"), early enough to act on. `make run` makes the voice on your machine with Piper or
+  espeak-ng (`scripts/make_voice.sh`); the clips are not in git, because a voice has its own
+  licence. B turns it off.
 - **Trees are solid** and hurt the car. R puts you back on the road at +15 s and repairs
   nothing. Short cuts don't count: the stage only finishes along the road.
 

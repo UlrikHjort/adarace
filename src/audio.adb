@@ -2,6 +2,7 @@
 --  Copyright (c) 2026 Ulrik Hørlyk Hjort
 --  SPDX-License-Identifier: MIT
 --
+with Ada.Directories;
 with Ada.Exceptions;
 with Ada.Numerics.Elementary_Functions;
 with Ada.Streams.Stream_IO;
@@ -48,6 +49,74 @@ package body Audio is
 
    procedure PA_Free (S : System.Address)
      with Import, Convention => C, External_Name => "pa_simple_free";
+
+   --  The co-driver's words, read once at the start
+   type Clip is array (Natural range <>) of aliased Integer_16 with Convention => C;
+   type Clip_Access is access Clip;
+   Clips : array (Codriver.Word) of Clip_Access;
+
+   procedure Load_Clips is
+      use Ada.Streams.Stream_IO;
+   begin
+      for W in Codriver.Word loop
+         declare
+            Name : constant String := Codriver.File_Name (W);
+            F : File_Type;
+         begin
+            if Ada.Directories.Exists (Name) then
+               Open (F, In_File, Name);
+               declare
+                  Samples : constant Natural := Natural (Size (F)) / 2;
+                  use Ada.Streams;
+               begin
+                  if Samples > 0 then
+                     Clips (W) := new Clip (0 .. Samples - 1);
+                     declare
+                        Bytes : Stream_Element_Array (1 .. Stream_Element_Offset (Samples * 2))
+                          with Import, Address => Clips (W).all'Address;
+                        Last : Stream_Element_Offset;
+                     begin
+                        Read (F, Bytes, Last);
+                     end;
+                  end if;
+               end;
+               Close (F);
+            end if;
+         exception
+            when others => null;   --  a word missing is no reason to stop
+         end;
+      end loop;
+   end Load_Clips;
+
+   type Word_List is array (1 .. 24) of Codriver.Word;
+
+   protected Voice_Queue is
+      procedure Put (W : Codriver.Word);
+      procedure Take (W : out Codriver.Word; Got : out Boolean);
+   private
+      Q : Word_List;
+      N : Natural := 0;
+   end Voice_Queue;
+
+   protected body Voice_Queue is
+      procedure Put (W : Codriver.Word) is
+      begin
+         if N < Q'Last then
+            N := N + 1;
+            Q (N) := W;
+         end if;
+      end Put;
+      procedure Take (W : out Codriver.Word; Got : out Boolean) is
+      begin
+         W := Codriver.Finish;
+         Got := N > 0;
+         if Got then
+            W := Q (1);
+            Q (1 .. N - 1) := Q (2 .. N);
+            N := N - 1;
+         end if;
+      end Take;
+   end Voice_Queue;
 
    Cap_Rate : constant Float := 0.85;   --  the level of a recording
 
@@ -202,6 +271,10 @@ package body Audio is
       Beep_P : Float := 0.0;
       Beep_F : Float := 800.0;
       Rumble_P : Float := 0.0;
+      Talking : Clip_Access := null;
+      Talk_At : Natural := 0;
+      Talk_Gap : Natural := 0;     --  a breath between words
+      Duck_S : Float := 1.0;       --  the rest drops while it speaks
       Turbo_P, Spool_S, Pop_E, Stone_E, Drop_E, Rain_S : Float := 0.0;
       Wiper_P : Float := 0.0;
       Grav_F, Stone_F, Rain_F, Drop_F, Pop_F, Swish_F : Filter;
@@ -216,7 +289,9 @@ package body Audio is
       SName : C.Strings.chars_ptr := C.Strings.New_String ("car");
    begin
       select
-         accept Go;
+         accept Go do
+            Load_Clips;
+         end Go;
       or
          terminate;
       end select;
@@ -354,6 +429,7 @@ package body Audio is
                   Clk : constant Float := White * 0.3 * Clunk_E * Clunk_E;
                   Bp : constant Float := Sin (Two_Pi * Beep_P) * 0.22 * Beep_E;
                   Eng_Gain : constant Float := (if P.Inside then 0.75 else 0.6);
+                  Spoken : Float := 0.0;
                   Mono0 : constant Float :=
                     Eng * Eng_Gain + Whine_S + Whistle + Pop * 0.5 + Tyre + Wind + Road + Rib
                     + Gravel + Rain_N + Swish + Scr + Bang + Clk + Bp;
@@ -361,8 +437,31 @@ package body Audio is
                begin
                   --  From inside the cockpit the top end is duller
                   Low_In := Low_In + (Mono0 - Low_In) * (if P.Inside then 0.5 else 0.85);
-                  Left := Low_In;
-                  Right := Low_In;
+                  if Talking = null and then Talk_Gap = 0 then
+                     declare
+                        W : Codriver.Word;
+                        Got : Boolean;
+                     begin
+                        Voice_Queue.Take (W, Got);
+                        if Got and then Clips (W) /= null then
+                           Talking := Clips (W);
+                           Talk_At := Talking'First;
+                        end if;
+                     end;
+                  elsif Talk_Gap > 0 then
+                     Talk_Gap := Talk_Gap - 1;
+                  end if;
+                  if Talking /= null then
+                     Spoken := Float (Talking (Talk_At)) / 32768.0 * 1.0;
+                     Talk_At := Talk_At + 1;
+                     if Talk_At > Talking'Last then
+                        Talking := null;
+                        Talk_Gap := Rate / 25;
+                     end if;
+                  end if;
+                  Smooth (Duck_S, (if Talking /= null then 0.55 else 1.0), 0.001);
+                  Left := Low_In * Duck_S + Spoken;
+                  Right := Low_In * Duck_S + Spoken;
 
                   --  The others
                   for V in Voice_List'Range loop
@@ -514,6 +613,20 @@ package body Audio is
    end Stop_Capture;
 
    function Playing return Boolean is (Mixer_Up);
+
+   procedure Speak (W : Codriver.Word) is
+   begin
+      Voice_Queue.Put (W);
+   end Speak;
+
+   function Has_Voice return Boolean is
+      Any : Boolean := False;
+   begin
+      for C of Clips loop
+         Any := Any or else C /= null;
+      end loop;
+      return Any;
+   end Has_Voice;
 
    function Peak return Float is (Shared.Get_Peak);
 

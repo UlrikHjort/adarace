@@ -11,8 +11,11 @@ all: game
 game:
 	gprbuild -p -P adarace.gpr -j0
 
-run: game
+run: game voice
 	./bin/adarace
+
+voice:
+	@scripts/make_voice.sh
 
 test:
 	gprbuild -p -P simtest.gpr -j0
@@ -27,4 +30,4 @@ clean:
 	gprclean -q -P simtest.gpr
 	gprclean -q -P wheelprobe.gpr
 
-.PHONY: all game run test wheel clean
+.PHONY: all game run voice test wheel clean

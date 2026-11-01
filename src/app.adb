@@ -38,6 +38,7 @@ with Gtk.Window;
 with Gdk.Screen;
 
 with Audio;
+with Codriver;
 with Car_Model;
 with GL;
 with GL_Area;
@@ -99,6 +100,7 @@ package body App is
    procedure Set_Frame_Sync (W : Gdk.Gdk_Window; On : Gboolean)
      with Import, Convention => C, External_Name => "gdk_x11_window_set_frame_sync_enabled";
 
+   Voice_On : Boolean := True;
    Want_Record : Boolean := False;   --  F9: done where the picture is ready
    Record_At, Record_For : Float := 0.0;  --  automated: from when, how long
 
@@ -165,6 +167,7 @@ package body App is
       Item ("aid", Integer (Combo_Aid.Get_Active));
       Item ("weather", Integer (Combo_Weather.Get_Active));
       Item ("season", Integer (Combo_Season.Get_Active));
+      Item ("voice", (if Voice_On then 1 else 0));
       Item ("wear", Integer (Combo_Wear.Get_Active));
       Item ("damage", Integer (Combo_Damage.Get_Active));
       for C in Vehicle.Car_Kind loop
@@ -220,6 +223,7 @@ package body App is
                   elsif N = "aid" then Combo_Aid.Set_Active (G);
                   elsif N = "weather" then Combo_Weather.Set_Active (G);
                   elsif N = "season" then Combo_Season.Set_Active (G);
+                  elsif N = "voice" then Voice_On := V /= 0;
                   elsif N = "wear" then Combo_Wear.Set_Active (G);
                   elsif N = "damage" then Combo_Damage.Set_Active (G);
                   elsif N'Length = 4 and then N (N'First .. N'First + 1) = "su" then
@@ -347,6 +351,7 @@ package body App is
       end if;
       Session.Start (S);
       School.Begin_Lesson (if In_School then Lesson_Chosen else 0);
+      Codriver.Reset;
       Area.Make_Current;
       Scenery.Build_Guide;
       Options.Guide := In_School or else Combo_Aid.Get_Active > 0;
@@ -464,6 +469,9 @@ package body App is
       elsif K = GDK_LC_a then Sim_Loop.Request_Shift (True);
       elsif K = GDK_LC_z then Sim_Loop.Request_Shift (False);
       elsif K = GDK_LC_x then Sim_Loop.Request_Reverse (True);
+      elsif K = GDK_LC_b then
+         Voice_On := not Voice_On;
+         Say ((if Voice_On then "Co-driver speaks" else "Co-driver silent"), 1.5);
       elsif K = GDK_F9 then
          Want_Record := True;
       elsif K = GDK_LC_c then Next_Camera;
@@ -665,6 +673,23 @@ package body App is
          end;
       end loop;
       Audio.Set (P);
+
+      --  The co-driver reads the road ahead
+      if Session.Config.Mode = Session.Stage and then Voice_On then
+         if not F.Laps (1).On_Grid and then not F.Laps (1).Finished then
+            Codriver.Update (F.Laps (1).S, F.Speed, Track.Stage_End - F.Laps (1).Progress);
+            declare
+               W : Codriver.Word;
+               Got : Boolean;
+            begin
+               loop
+                  Codriver.Next_Word (W, Got);
+                  exit when not Got;
+                  Audio.Speak (W);
+               end loop;
+            end;
+         end if;
+      end if;
 
       if F.Gear /= Last_Gear then
          Audio.Clunk;
@@ -1045,7 +1070,7 @@ package body App is
       Gtk.Label.Gtk_New
         (Hint,
          "Wheel: d-pad and X choose, start.  Keys: arrows, A/Z shift, C camera, R back on track," & ASCII.LF
-         & "L line on/off, F9 record, Esc pause, F11 fullscreen.  Rally: choose Skovvej.  Pit box: yellow lines past the start.");
+         & "L line, B co-driver's voice, F9 record, Esc pause, F11 fullscreen.  Rally: choose Skovvej.  Pit box: yellow lines past the start.");
       Hint.Set_Name ("hint");
       Hint.Set_Halign (Gtk.Widget.Align_Start);
       Menu.Pack_Start (Hint, False, False);

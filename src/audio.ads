@@ -6,6 +6,8 @@
 --  PulseAudio: the engine from its firing pulses, tyres, wind, kerbs and the
 --  other cars.  Without a sound server the game is simply silent.
 
+with Codriver;
+
 package Audio is
 
    type Engine_Kind is (V8, V10, Turbo_Four);
@@ -48,6 +50,11 @@ package Audio is
 
    procedure Beep (High : Boolean);
    --  Start lights
+
+   procedure Speak (W : Codriver.Word);
+   --  Over the intercom: one word after another; silent if it has no clip
+
+   function Has_Voice return Boolean;
 
    procedure Start_Capture (File : String);
    procedure Stop_Capture;
