@@ -68,9 +68,9 @@ Physics run at 1 kHz in an Ada task of their own, independent of the frame rate.
   wheel goes light at the limit, with kerbs, road surface and impacts on top.
   Sent at 125 Hz.
 
-Three cars: a road GT, a GT3 with slicks and wings, and a four wheel drive rally car.
-Three circuits: Søndersø Ring (4.9 km), Monte Ferro (3.2 km, 64 m of climb) and Kalvø
-Speedway (3.2 km, banked oval), and the Skovvej forest rally stage (about 5 km).
+Five cars: a road GT, a GT3 with slicks and wings, a four wheel drive rally car, a light
+classic and a mid-engined hypercar. Three circuits: Søndersø Ring (4.9 km), Monte Ferro
+(3.2 km, 64 m of climb) and Kalvø Speedway (3.2 km, banked oval), and three rally stages.
 
 Hot laps against the ghost of your best lap, which is kept per car and circuit
 in `~/.local/share/adarace`, or races against up to seven AI cars on the same
@@ -172,6 +172,29 @@ about 5 km of gravel road through a forest, timed from the lights to the finish 
 
 The road continues beyond the finish back to the start (it closes the loop in the data),
 but a stage ends at the finish, and the marshals brake the car.
+
+Mode *Rally* runs every stage in turn: Skovvej, Granbakken (tight, with hairpins) and Søvej
+(wide and fast). Your times add up against five crews whose pace follows the AI strength, and
+damage goes with you, half of it mended at each service.
+
+## Your own roads
+
+Roads are text files in `tracks/`, read at start in the order of their names, so a new circuit
+or stage needs no code. `tracks/04-skovvej.track` is a good one to start from:
+
+    name My Road
+    kind stage             # or circuit
+    finish 400 500         # a stage only: where the clock stops
+    points
+    #    x      z  height  half-width  banking
+         0      0      10         4.2        0
+       300     40      12         4.2        0
+    ...
+
+The points are in metres and join into a closed loop, so a stage has a road home after its
+finish. Banking is in degrees, positive when the right side is lower. Keep parts of the road
+40 m apart and corners over about 12 m radius. A bad file is left out with a message naming
+the line, and `make test` drives the AI round everything in the folder.
 
 ## Driving school and coach
 

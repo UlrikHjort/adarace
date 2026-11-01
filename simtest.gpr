@@ -3,7 +3,7 @@ project Simtest is
    for Source_Dirs use ("src", "tests");
    for Source_Files use
      ("track.ads", "track.adb", "vehicle.ads", "vehicle.adb",
-      "session.ads", "session.adb", "telemetry.ads", "telemetry.adb", "school.ads", "school.adb", "codriver.ads", "codriver.adb", "simtest.adb", "trace.adb", "catch.adb");
+      "session.ads", "session.adb", "telemetry.ads", "telemetry.adb", "school.ads", "school.adb", "codriver.ads", "codriver.adb", "rally.ads", "rally.adb", "simtest.adb", "trace.adb", "catch.adb");
    for Object_Dir use "obj/test";
    for Exec_Dir use "bin";
    for Main use ("simtest.adb", "trace.adb", "catch.adb");

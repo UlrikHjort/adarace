@@ -203,7 +203,9 @@ package body Sim_Loop is
            (case Session.Config.Kind is
                when Vehicle.Race_GT3 => 420.0,
                when Vehicle.Road_GT => 260.0,
-               when Vehicle.Rally_4WD => 230.0);
+               when Vehicle.Rally_4WD => 230.0,
+               when Vehicle.Classic_RWD => 190.0,
+               when Vehicle.Hyper_AWD => 400.0);
       begin
          --  The aligning torque of the tyres: goes light at the limit
          F := C.Rack / Norm;

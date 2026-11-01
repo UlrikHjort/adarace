@@ -89,6 +89,22 @@ package body Car_Model is
                S.Roof := S.Belt + (S.Roof - S.Belt) * 0.86;
             end if;
             S.Bottom := S.Bottom - 0.03;
+         when Classic_RWD =>
+            --  Narrow and upright, a boxy little saloon
+            S.W := S.W * 0.90;
+            S.Roof_W := S.Roof_W * 0.95;
+            if S.Roof > S.Belt then
+               S.Roof := S.Belt + (S.Roof - S.Belt) * 1.05;
+            end if;
+         when Hyper_AWD =>
+            --  Low, with big haunches and a cab pushed forward
+            S.W := S.W + 0.07 + 0.1 * Near (Sp.B, 0.72) + 0.06 * Near (-Sp.A, 0.55);
+            S.Belt := S.Belt - 0.06 * Near (-Sp.A, 1.0);
+            if S.Roof > S.Belt then
+               S.Roof := S.Belt + (S.Roof - S.Belt) * 0.7;
+            end if;
+            S.Roof_W := S.Roof_W - 0.04;
+            S.Bottom := S.Bottom - 0.05;
          when Rally_4WD =>
             S.W := S.W * 0.97 + 0.05 * (Near (-Sp.A, 0.55) + Near (Sp.B, 0.55));
             if Z > 0.25 then
@@ -367,6 +383,20 @@ package body Car_Model is
             Box (B, (-0.62, 1.21, 1.52), (0.62, 1.25, 1.92), (0.04, 0.04, 0.05));
             Box (B, (-0.60, 0.11, -2.30), (0.60, 0.15, -1.0), (0.32, 0.33, 0.35), Metal);
             Box (B, (-0.62, 0.28, 2.23), (-0.42, 0.38, 2.34), (0.12, 0.12, 0.13), Metal);
+         when Classic_RWD =>
+            --  Chrome bumpers and a single exhaust
+            Box (B, (-0.80, 0.34, 2.28), (0.80, 0.44, 2.36), (0.5, 0.5, 0.52), Metal);
+            Box (B, (-0.80, 0.30, -2.40), (0.80, 0.40, -2.30), (0.5, 0.5, 0.52), Metal);
+            Box (B, (0.42, 0.24, 2.23), (0.54, 0.32, 2.40), (0.15, 0.15, 0.16), Metal);
+         when Hyper_AWD =>
+            --  Splitter, diffuser, a low wing and side intakes
+            Box (B, (-1.0, 0.07, -2.44), (1.0, 0.10, -1.9), Black);
+            Box (B, (-0.8, 0.14, 2.1), (0.8, 0.28, 2.38), Black);
+            Box (B, (-1.05, 0.92, 2.08), (1.05, 0.95, 2.42), (0.03, 0.03, 0.035));
+            Box (B, (-0.7, 0.78, 2.2), (-0.65, 0.93, 2.3), (0.03, 0.03, 0.035));
+            Box (B, (0.65, 0.78, 2.2), (0.7, 0.93, 2.3), (0.03, 0.03, 0.035));
+            Box (B, (-1.14, 0.42, 0.50), (-1.04, 0.62, 0.90), Black);
+            Box (B, (1.04, 0.42, 0.50), (1.14, 0.62, 0.90), Black);
          when Road_GT =>
             --  Exhausts
             Box (B, (-0.62, 0.28, 2.23), (-0.42, 0.38, 2.34), (0.12, 0.12, 0.13), Metal);
@@ -544,7 +574,7 @@ package body Car_Model is
       --  Rear of the cabin
       Quad (B, (-0.8, 0.86, 1.1), (0.8, 0.86, 1.1), (0.55, 1.18, 1.0), (-0.55, 1.18, 1.0), Pillar);
 
-      if Kind /= Road_GT then
+      if Kind in Race_GT3 | Rally_4WD then
          --  Roll cage
          Oriented_Box (B, (0.0, 1.13, 0.05), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0), 0.68, 0.025, 0.025, (0.6, 0.6, 0.62));
          Oriented_Box (B, (-0.55, 1.0, 0.45), (0.1, 0.1, 1.0), (0.0, 1.0, 0.0), 0.6, 0.025, 0.025, (0.6, 0.6, 0.62));
@@ -554,7 +584,7 @@ package body Car_Model is
 
    --  The steering wheel: a rim round the Z axis, the driver looks along -Z
    procedure Steering_Wheel (B : in out Builder; Kind : Car_Kind) is
-      R : constant Float := (if Kind = Race_GT3 then 0.155 else 0.185);
+      R : constant Float := (if Kind in Race_GT3 | Hyper_AWD then 0.155 else 0.185);
       Th : constant := 0.016;
       Segs : constant := 36;
       Sides : constant := 8;
@@ -601,7 +631,9 @@ package body Car_Model is
             Body_B, Wheel_B, Cock_B, Steer_B : Builder;
          begin
             Loft (Body_B, K);
-            Wheel (Wheel_B, S.Radius, (if K = Race_GT3 then 0.30 else 0.26));
+            Wheel (Wheel_B, S.Radius, (case K is when Race_GT3 | Hyper_AWD => 0.30,
+                                                  when Classic_RWD => 0.19,
+                                                  when others => 0.26));
             Cockpit (Cock_B, K);
             Steering_Wheel (Steer_B, K);
             Meshes (K) := (Upload (Body_B), Upload (Wheel_B), Upload (Cock_B), Upload (Steer_B));

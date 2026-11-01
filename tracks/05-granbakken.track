@@ -1,0 +1,37 @@
+# An AdaRace road.  One setting a line, then the points it runs through, closed
+# back to the first: x  z  height  half-width  banking (metres, degrees; banking
+# is positive when the right side is lower).  See "Your own roads" in the README.
+name Granbakken (rally stage)
+kind stage
+finish 610 170
+# Narrow and tight: hairpins up the hill, and a twisting run back down
+points
+       0        0     20   3.6     0
+     150       10     22   3.6     0
+     300      -10     25   3.4     0
+     420        0     28   3.4     1
+     465      -40     31   3.4     2
+     420      -80     34   3.4     1
+     280      -85     38   3.4     0
+     140      -70     42   3.4    -1
+      20      -95     46   3.4    -1
+     -30     -140     49   3.4    -2
+      20     -185     52   3.4    -1
+     170     -190     56   3.4     0
+     320     -175     60   3.4     0
+     470     -200     62   3.4     0
+     600     -170     60   3.4     1
+     700     -230     57   3.4    -1
+     800     -170     54   3.4     1
+     910     -210     50   3.4     0
+     960     -120     46   3.4     2
+     900      -40     42   3.4     1
+     940       60     38   3.4    -1
+     860      150     36   3.4     2
+     730      120     34   3.4     0
+     610      170     30   3.6     0
+     470      130     26   3.8     0
+     330      190     24   3.8     0
+     190      160     22   3.8     0
+      60      110     20   3.8     0
+     -70       60     20   3.8     0

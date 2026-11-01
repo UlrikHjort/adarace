@@ -11,6 +11,7 @@ with Glib;
 with System;
 
 with Hud_Layer;
+with Rally;
 with School;
 with Session;
 with Track;
@@ -621,7 +622,41 @@ package body Hud is
       end if;
 
       --  Stage over ----------------------------------------------------------
-      if On_Stage and then F.Laps (1).Finished and then F.School.Phase = School.Off then
+      --  The rally's table, at the end of each stage
+      if Rally.Active and then Rally.Finished_Stage then
+         declare
+            PW : constant Float := 560.0 * S;
+            PX : constant Float := Cx - PW / 2.0;
+            PY : constant Float := H * 0.16;
+            RowH : constant Float := 34.0 * S;
+         begin
+            Panel (PX, PY, PW, 118.0 * S + RowH * Float (Rally.Standings'Length), 0.86);
+            Color (1.0, 0.85, 0.25);
+            Text ((if Rally.Is_Last then "FINAL RESULT"
+                   else "AFTER STAGE" & Positive'Image (Rally.Stage_Number) & " OF"
+                        & Natural'Image (Rally.Stage_Total)),
+                  Cx, PY + 34.0 * S, 22.0 * S, 0.5);
+            for R in Rally.Standings'Range loop
+               declare
+                  E : Rally.Standing renames Rally.Standings (R);
+                  Y : constant Float := PY + 72.0 * S + RowH * Float (R - 1);
+               begin
+                  if E.Crew = Rally.Crew_Id'Last then
+                     Color (0.45, 1.0, 0.55);
+                  else
+                     Color (0.92, 0.92, 0.95);
+                  end if;
+                  Text (Trim (Positive'Image (R)) & ". " & Rally.Crew_Name (E.Crew),
+                        PX + 26.0 * S, Y, 18.0 * S);
+                  Text (Format_Time (E.Total), PX + PW - 26.0 * S, Y, 18.0 * S, 1.0);
+               end;
+            end loop;
+            Color (0.8, 0.8, 0.84);
+            Text ((if Rally.Is_Last then "X / Enter: back to the menu"
+                   else "X / Enter: to the next stage"),
+                  Cx, PY + 86.0 * S + RowH * Float (Rally.Standings'Length), 15.0 * S, 0.5);
+         end;
+      elsif On_Stage and then F.Laps (1).Finished and then F.School.Phase = School.Off then
          declare
             L1 : Session.Lap_Info renames F.Laps (1);
             PW : constant Float := 440.0 * S;

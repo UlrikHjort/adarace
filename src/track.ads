@@ -38,9 +38,21 @@ package Track is
    Length  : Float := 0.0;
    Spacing : Float := 2.0;
 
-   Track_Count : constant := 4;
-   subtype Track_Id is Positive range 1 .. Track_Count;
+   --  The roads are files in tracks/, in the order of their names
+   Max_Tracks : constant := 32;
+   subtype Track_Id is Positive range 1 .. Max_Tracks;
+
+   function Track_Count return Natural;
    function Name (T : Track_Id) return String;
+   function Stage_Road (T : Track_Id) return Boolean;
+
+   Bad_Track : exception;
+
+   procedure Check_File (File : String; Good : out Boolean; Why : out Positive);
+   --  Whether a file is a road that can be driven; Why: the line it fails on
+
+   procedure Catalogue (Folder : String);
+   --  Read the roads from another folder (normally done by itself)
 
    procedure Load (T : Track_Id);
    --  Build the circuit (a second or so).  Not while the simulation runs.
