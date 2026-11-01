@@ -19,6 +19,9 @@ package Hud is
 
    function Format_Time (T : Float) return String;
 
+   In_Cockpit : Boolean := False;
+   --  The real instruments are in view: no rev bar, speed or gear panel
+
    Coach_On : Boolean := False;
    --  The coach's tips on the screen
 

@@ -2,14 +2,23 @@
 --  Copyright (c) 2026 Ulrik Hørlyk Hjort
 --  SPDX-License-Identifier: MIT
 --
+with Ada.Containers.Indefinite_Ordered_Sets;
+with Ada.Directories;
+with Ada.Exceptions;
 with Ada.Numerics.Elementary_Functions;
 with Ada.Numerics.Float_Random;
+with Ada.Strings.Fixed;
+with Ada.Strings.Unbounded;
+with Ada.Text_IO;
 with Ada.Unchecked_Deallocation;
 with Interfaces;
 
 package body Track is
 
    use Ada.Numerics.Elementary_Functions;
+   use Ada.Strings.Unbounded;
+
+   type Float_List is array (Natural range <>) of Float;
 
    Pi : constant := 3.14159_26535;
 
@@ -19,149 +28,239 @@ package body Track is
       X, Z, Y, W, B : Float;
    end record;
    type Point_Array is array (Positive range <>) of Point;
+   type Point_Access is access Point_Array;
 
-   --  Søndersø Ring: a grand prix circuit in rolling country.  The long
-   --  straight, a fast right, the esses, a hairpin in the far corner,
-   --  and a climb back over the crest.
-   Ring : constant Point_Array :=
-     ((-300.0,    0.0, 20.0, 7.0, 0.0),
-      ( 100.0,    0.0, 17.0, 7.0, 0.0),
-      ( 440.0,    0.0, 15.0, 7.0, 0.0),
-      ( 600.0,   25.0, 14.0, 7.0, 2.0),
-      ( 690.0,  120.0, 13.0, 6.5, 3.0),
-      ( 690.0,  250.0, 15.0, 6.5, 0.0),
-      ( 750.0,  370.0, 19.0, 6.5, -1.0),
-      ( 870.0,  450.0, 25.0, 6.5, 0.0),
-      ( 990.0,  560.0, 30.0, 6.5, 2.0),
-      (1020.0,  720.0, 34.0, 6.5, 2.0),
-      ( 985.0,  860.0, 35.0, 7.0, 3.0),
-      ( 880.0,  925.0, 34.0, 7.5, 4.0),
-      ( 780.0,  880.0, 32.0, 7.0, 3.0),
-      ( 700.0,  760.0, 29.0, 6.5, 0.0),
-      ( 570.0,  700.0, 25.0, 6.5, -1.0),
-      ( 450.0,  760.0, 21.0, 6.5, -1.0),
-      ( 320.0,  780.0, 18.0, 6.5, 1.0),
-      ( 230.0,  680.0, 16.0, 6.5, 2.0),
-      ( 210.0,  540.0, 17.0, 6.5, 0.0),
-      ( 110.0,  440.0, 20.0, 6.5, -1.0),
-      ( -40.0,  460.0, 23.0, 6.5, 0.0),
-      (-150.0,  570.0, 26.0, 6.5, 0.0),
-      (-310.0,  590.0, 30.0, 6.5, 2.0),
-      (-430.0,  480.0, 35.0, 6.5, 2.0),
-      (-470.0,  340.0, 38.0, 6.5, 0.0),
-      (-590.0,  240.0, 36.0, 6.5, -1.0),
-      (-720.0,  170.0, 31.0, 6.5, 0.0),
-      (-790.0,   60.0, 27.0, 6.5, 3.0),
-      (-730.0,  -30.0, 24.0, 7.0, 3.0),
-      (-580.0,  -30.0, 22.0, 7.0, 1.0));
+   type Road_Info is record
+      Name : Unbounded_String;
+      Stage : Boolean := False;
+      Finish_X, Finish_Z : Float := 0.0;
+      Points : Point_Access;
+   end record;
 
-   --  Monte Ferro: a narrow mountain circuit, sixty metres of climb,
-   --  blind crests and a run down through the woods.
-   Monte : constant Point_Array :=
-     ((   0.0,    0.0, 10.0, 5.5, 0.0),
-      ( 180.0,  -20.0, 13.0, 5.5, 0.0),
-      ( 330.0,  -90.0, 20.0, 5.5, -2.0),
-      ( 390.0, -210.0, 30.0, 5.0, -3.0),
-      ( 330.0, -330.0, 40.0, 5.0, -2.0),
-      ( 200.0, -360.0, 48.0, 5.0, 0.0),
-      ( 100.0, -440.0, 56.0, 5.0, 2.0),
-      ( 150.0, -560.0, 63.0, 5.0, 3.0),
-      ( 280.0, -600.0, 69.0, 5.0, 3.0),
-      ( 400.0, -560.0, 72.0, 5.0, 4.0),
-      ( 470.0, -440.0, 70.0, 5.0, 0.0),
-      ( 600.0, -390.0, 64.0, 5.0, -3.0),
-      ( 700.0, -290.0, 55.0, 5.0, 1.0),
-      ( 660.0, -170.0, 46.0, 5.0, 4.0),
-      ( 560.0,  -60.0, 37.0, 5.0, 0.0),
-      ( 600.0,   70.0, 30.0, 5.0, -2.0),
-      ( 530.0,  190.0, 24.0, 5.0, 3.0),
-      ( 380.0,  210.0, 18.0, 5.5, 2.0),
-      ( 250.0,  130.0, 13.0, 5.5, -1.0),
-      ( 100.0,  140.0,  9.0, 5.5, 3.0),
-      ( -90.0,  110.0,  8.0, 5.5, 4.0),
-      (-130.0,   30.0,  9.0, 5.5, 4.0));
-
-   --  Kalvø Speedway: a banked oval, flat out if you dare
-   Oval : constant Point_Array :=
-     ((   0.0,    0.0, 5.0, 8.0, 3.0),
-      ( 300.0,    0.0, 5.0, 8.0, 3.0),
-      ( 520.0,   30.0, 5.0, 8.5, 14.0),
-      ( 650.0,  160.0, 5.0, 9.0, 20.0),
-      ( 650.0,  340.0, 5.0, 9.0, 20.0),
-      ( 520.0,  470.0, 5.0, 8.5, 14.0),
-      ( 300.0,  500.0, 5.0, 8.0, 3.0),
-      (   0.0,  500.0, 5.0, 8.0, 3.0),
-      (-300.0,  500.0, 5.0, 8.0, 3.0),
-      (-520.0,  470.0, 5.0, 8.5, 14.0),
-      (-650.0,  340.0, 5.0, 9.0, 20.0),
-      (-650.0,  160.0, 5.0, 9.0, 20.0),
-      (-520.0,   30.0, 5.0, 8.5, 14.0),
-      (-300.0,    0.0, 5.0, 8.0, 3.0));
-
-   --  Skovvej: a forest road, a loop in the map.  The stage runs out along the
-   --  south, up the east side and back along the north to Finish_X, Finish_Z;
-   --  the last part is the road home.
-   Forest : constant Point_Array :=
-     ((   0.0,    0.0, 30.0, 3.8, 0.0),
-      ( 120.0,  -10.0, 31.0, 3.8, 0.0),
-      ( 240.0,   30.0, 33.0, 3.6, 1.0),
-      ( 330.0,  -40.0, 38.0, 3.6, -1.0),
-      ( 460.0,  -70.0, 42.0, 3.6, 0.0),
-      ( 540.0,  -10.0, 40.0, 3.6, 2.0),
-      ( 660.0,   20.0, 36.0, 3.6, 0.0),
-      ( 760.0,  -60.0, 40.0, 3.6, -2.0),
-      ( 900.0,  -50.0, 47.0, 3.6, 0.0),
-      ( 970.0,   40.0, 50.0, 3.6, 2.0),
-      (1090.0,   60.0, 46.0, 3.6, 0.0),
-      (1180.0,  -20.0, 44.0, 3.6, -2.0),
-      (1320.0,  -20.0, 50.0, 3.6, 0.0),
-      (1410.0,   70.0, 56.0, 3.6, 2.0),
-      (1390.0,  200.0, 60.0, 3.6, 1.0),
-      (1290.0,  250.0, 58.0, 3.6, -1.0),
-      (1210.0,  340.0, 54.0, 3.6, -2.0),
-      (1290.0,  440.0, 50.0, 3.6, -2.0),
-      (1420.0,  470.0, 54.0, 3.6, 0.0),
-      (1480.0,  580.0, 60.0, 3.6, 2.0),
-      (1400.0,  680.0, 66.0, 3.6, 2.0),
-      (1270.0,  650.0, 62.0, 3.6, 0.0),
-      (1170.0,  700.0, 57.0, 3.6, -2.0),
-      (1190.0,  820.0, 52.0, 3.6, -2.0),
-      (1320.0,  870.0, 56.0, 3.6, 0.0),
-      (1300.0,  990.0, 62.0, 3.6, 2.0),
-      (1170.0, 1010.0, 68.0, 3.6, 2.0),
-      (1060.0,  930.0, 64.0, 3.6, 0.0),
-      ( 960.0,  980.0, 58.0, 3.6, 0.0),
-      ( 850.0,  900.0, 52.0, 3.6, 2.0),
-      ( 880.0,  780.0, 47.0, 3.6, 0.0),
-      ( 770.0,  700.0, 43.0, 3.6, -1.0),
-      ( 640.0,  760.0, 48.0, 3.6, 0.0),
-      ( 600.0,  880.0, 54.0, 3.6, 1.0),
-      ( 480.0,  950.0, 60.0, 3.6, 0.0),
-      ( 360.0,  880.0, 56.0, 3.6, 1.0),
-      ( 390.0,  760.0, 50.0, 3.6, 0.0),
-      ( 290.0,  680.0, 45.0, 3.6, -1.0),
-      ( 160.0,  730.0, 49.0, 3.6, 0.0),
-      (  60.0,  650.0, 44.0, 3.6, 2.0),
-      ( 110.0,  530.0, 38.0, 3.8, 0.0),
-      (  40.0,  420.0, 34.0, 3.8, 0.0),
-      ( -60.0,  300.0, 32.0, 3.8, 0.0),
-      (-110.0,  170.0, 30.0, 3.8, 0.0),
-      ( -70.0,   40.0, 30.0, 3.8, 0.0));
-   Finish_X : constant := 110.0;
-   Finish_Z : constant := 530.0;
+   Roads : array (Track_Id) of Road_Info;
+   Road_Count : Natural := 0;
+   Read_Yet : Boolean := False;
 
    Current : Track_Id := 1;
 
+   --  One road from its file; on a fault, Bad_Track with the line it was on
+   procedure Read_Road (File : String; R : out Road_Info) is
+      use Ada.Text_IO;
+      F : File_Type;
+      Line_No : Natural := 0;
+      Buffer : array (1 .. 400) of Point;
+      Used : Natural := 0;
+      In_Points : Boolean := False;
+      Has_Kind, Has_Name, Has_Finish : Boolean := False;
+
+      procedure Fail (Why : String) is
+      begin
+         raise Bad_Track with File & ":" & Line_No'Image & ": " & Why;
+      end Fail;
+
+      function Word_End (S : String; From : Positive) return Natural is
+         E : Natural := From;
+      begin
+         while E <= S'Last and then S (E) not in ' ' | ASCII.HT loop
+            E := E + 1;
+         end loop;
+         return E - 1;
+      end Word_End;
+
+      procedure Numbers (S : String; V : out Float_List; Count : out Natural) is
+         I : Natural := S'First;
+      begin
+         Count := 0;
+         while I <= S'Last loop
+            if S (I) in ' ' | ASCII.HT then
+               I := I + 1;
+            else
+               declare
+                  E : constant Natural := Word_End (S, I);
+               begin
+                  Count := Count + 1;
+                  if Count > V'Length then
+                     Fail ("too many numbers");
+                  end if;
+                  begin
+                     V (V'First + Count - 1) := Float'Value (S (I .. E));
+                  exception
+                     when Constraint_Error =>
+                        Fail ("not a number: " & S (I .. E));
+                  end;
+                  I := E + 1;
+               end;
+            end if;
+         end loop;
+      end Numbers;
+   begin
+      Open (F, In_File, File);
+      R := (others => <>);
+      while not End_Of_File (F) loop
+         Line_No := Line_No + 1;
+         declare
+            Raw : constant String := Get_Line (F);
+            Hash : constant Natural := Ada.Strings.Fixed.Index (Raw, "#");
+            Line : constant String :=
+              Ada.Strings.Fixed.Trim ((if Hash > 0 then Raw (Raw'First .. Hash - 1) else Raw),
+                                      Ada.Strings.Both);
+         begin
+            if Line = "" then
+               null;
+            elsif In_Points then
+               declare
+                  V : Float_List (1 .. 5);
+                  N : Natural;
+               begin
+                  Numbers (Line, V, N);
+                  if N /= 5 then
+                     Fail ("a point is x z height half-width banking");
+                  end if;
+                  if V (4) < 2.0 or else V (4) > 30.0 then
+                     Fail ("half-width should be 2 to 30 metres");
+                  end if;
+                  if Used = Buffer'Last then
+                     Fail ("more points than a road may have");
+                  end if;
+                  Used := Used + 1;
+                  Buffer (Used) := (V (1), V (2), V (3), V (4), V (5));
+               end;
+            else
+               declare
+                  E : constant Natural := Word_End (Line, Line'First);
+                  Key : constant String := Line (Line'First .. E);
+                  Rest : constant String :=
+                    Ada.Strings.Fixed.Trim (Line (E + 1 .. Line'Last), Ada.Strings.Both);
+               begin
+                  if Key = "name" then
+                     R.Name := To_Unbounded_String (Rest);
+                     Has_Name := Rest /= "";
+                  elsif Key = "kind" then
+                     if Rest = "stage" then
+                        R.Stage := True;
+                     elsif Rest /= "circuit" then
+                        Fail ("kind is circuit or stage");
+                     end if;
+                     Has_Kind := True;
+                  elsif Key = "finish" then
+                     declare
+                        V : Float_List (1 .. 2);
+                        N : Natural;
+                     begin
+                        Numbers (Rest, V, N);
+                        if N /= 2 then
+                           Fail ("finish is x z");
+                        end if;
+                        R.Finish_X := V (1);
+                        R.Finish_Z := V (2);
+                        Has_Finish := True;
+                     end;
+                  elsif Key = "points" then
+                     In_Points := True;
+                  else
+                     Fail ("not a setting: " & Key);
+                  end if;
+               end;
+            end if;
+         end;
+      end loop;
+      Close (F);
+      if not Has_Name then
+         Fail ("it has no name");
+      elsif not Has_Kind then
+         Fail ("it has no kind");
+      elsif R.Stage and then not Has_Finish then
+         Fail ("a stage needs a finish");
+      elsif Used < 4 then
+         Fail ("a road needs at least four points");
+      end if;
+      R.Points := new Point_Array'(Point_Array (Buffer (1 .. Used)));
+   exception
+      when others =>
+         if Is_Open (F) then
+            Close (F);
+         end if;
+         raise;
+   end Read_Road;
+
+   procedure Catalogue (Folder : String) is
+      use Ada.Directories;
+      package Names is new Ada.Containers.Indefinite_Ordered_Sets (String);
+      Found : Names.Set;
+      It : Search_Type;
+      E : Directory_Entry_Type;
+   begin
+      Road_Count := 0;
+      Read_Yet := True;
+      Start_Search (It, Folder, "*.track", (Ordinary_File => True, others => False));
+      while More_Entries (It) loop
+         Get_Next_Entry (It, E);
+         Found.Include (Full_Name (E));
+      end loop;
+      End_Search (It);
+      for File of Found loop
+         begin
+            if Road_Count < Max_Tracks then
+               Read_Road (File, Roads (Road_Count + 1));
+               Road_Count := Road_Count + 1;
+            end if;
+         exception
+            when X : Bad_Track =>
+               --  One bad file does not stop the game; say which and why
+               Ada.Text_IO.Put_Line ("Track left out: " & Ada.Exceptions.Exception_Message (X));
+         end;
+      end loop;
+      if Road_Count = 0 then
+         raise Bad_Track with "no roads in " & Folder;
+      end if;
+   end Catalogue;
+
+   procedure Need_Roads is
+   begin
+      if not Read_Yet then
+         Catalogue ("tracks");
+      end if;
+   end Need_Roads;
+
+   function Track_Count return Natural is
+   begin
+      Need_Roads;
+      return Road_Count;
+   end Track_Count;
+
    function Name (T : Track_Id) return String is
-     (case T is
-         when 1 => "Sondersoe Ring",
-         when 2 => "Monte Ferro",
-         when 3 => "Kalvoe Speedway",
-         when 4 => "Skovvej (rally stage)");
+   begin
+      Need_Roads;
+      return To_String (Roads (T).Name);
+   end Name;
+
+   function Stage_Road (T : Track_Id) return Boolean is
+   begin
+      Need_Roads;
+      return Roads (T).Stage;
+   end Stage_Road;
+
+   procedure Check_File (File : String; Good : out Boolean; Why : out Positive) is
+      R : Road_Info;
+   begin
+      Good := True;
+      Why := 1;
+      Read_Road (File, R);
+   exception
+      when X : Bad_Track =>
+         Good := False;
+         declare
+            M : constant String := Ada.Exceptions.Exception_Message (X);
+            C : constant Natural := Ada.Strings.Fixed.Index (M, ":");
+            D : constant Natural := Ada.Strings.Fixed.Index (M (C + 1 .. M'Last), ":");
+         begin
+            Why := Integer'Max (1, Integer'Value (M (C + 1 .. D - 1)));
+         end;
+   end Check_File;
 
    function Loaded return Track_Id is (Current);
 
-   function Is_Stage return Boolean is (Current = 4);
+   function Is_Stage return Boolean is (Roads (Current).Stage);
 
    function Next (I : Natural; N : Integer := 1) return Natural is
      (Natural ((Integer (I) + N) mod Count));
@@ -231,8 +330,6 @@ package body Track is
 
    procedure Free is new Ada.Unchecked_Deallocation (Sample_Array, Sample_Access);
    procedure Free is new Ada.Unchecked_Deallocation (Float_Grid, Float_Grid_Access);
-
-   type Float_List is array (Natural range <>) of Float;
 
    --  Moving average round the loop, Passes times
    procedure Circular_Smooth (V : in out Float_List; Radius : Positive; Passes : Positive := 1) is
@@ -1179,20 +1276,16 @@ package body Track is
 
    procedure Load (T : Track_Id) is
    begin
+      Need_Roads;
       Current := T;
-      case T is
-         when 1 => Build_Line (Ring);
-         when 2 => Build_Line (Monte);
-         when 3 => Build_Line (Oval);
-         when 4 => Build_Line (Forest);
-      end case;
+      Build_Line (Roads (T).Points.all);
       Frames;
       Edges;
       Build_Terrain;
       Build_Racing_Line;
       Place_Trees;
       if Is_Stage then
-         Stage_End := Samples (Find_Nearest (Finish_X, Finish_Z)).S;
+         Stage_End := Samples (Find_Nearest (Roads (T).Finish_X, Roads (T).Finish_Z)).S;
       else
          Stage_End := Length;
       end if;

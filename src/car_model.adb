@@ -48,11 +48,12 @@ package body Car_Model is
       ( 2.30, 0.80, 0.38, 0.87, 0.87, 0.62));
 
    Arch_R       : constant := 0.40;
+   Last_Profile_Z : constant := 2.30;
 
    function Mix (A, B, T : Float) return Float is (A + (B - A) * T);
 
    --  A station anywhere along the car, by interpolation
-   function At_Z (Z : Float) return Station is
+   function Base_Z (Z : Float) return Station is
    begin
       for I in Profile'First .. Profile'Last - 1 loop
          if Z <= Profile (I + 1).Z then
@@ -68,6 +69,58 @@ package body Car_Model is
          end if;
       end loop;
       return Profile (Profile'Last);
+   end Base_Z;
+
+   --  The cars are one family, each its own shape: the GT3 low with flared
+   --  arches, the R4 a tall hatchback, its roof running on to a steep tail
+   function At_Z (Z : Float; Kind : Car_Kind) return Station is
+      S : Station := Base_Z (Z);
+      Sp : constant Spec := Spec_Of (Kind);
+      function Near (Axle, Reach : Float) return Float is
+        (Exp (-((Z - Axle) / Reach) ** 2));
+   begin
+      case Kind is
+         when Road_GT =>
+            null;
+         when Race_GT3 =>
+            S.W := S.W + 0.085 * (Near (-Sp.A, 0.62) + Near (Sp.B, 0.66)) + 0.02;
+            S.Roof_W := S.Roof_W - 0.02;
+            if S.Roof > S.Belt then
+               S.Roof := S.Belt + (S.Roof - S.Belt) * 0.86;
+            end if;
+            S.Bottom := S.Bottom - 0.03;
+         when Classic_RWD =>
+            --  Narrow and upright, a boxy little saloon
+            S.W := S.W * 0.90;
+            S.Roof_W := S.Roof_W * 0.95;
+            if S.Roof > S.Belt then
+               S.Roof := S.Belt + (S.Roof - S.Belt) * 1.05;
+            end if;
+         when Hyper_AWD =>
+            --  Low, with big haunches and a cab pushed forward
+            S.W := S.W + 0.07 + 0.1 * Near (Sp.B, 0.72) + 0.06 * Near (-Sp.A, 0.55);
+            S.Belt := S.Belt - 0.06 * Near (-Sp.A, 1.0);
+            if S.Roof > S.Belt then
+               S.Roof := S.Belt + (S.Roof - S.Belt) * 0.7;
+            end if;
+            S.Roof_W := S.Roof_W - 0.04;
+            S.Bottom := S.Bottom - 0.05;
+         when Rally_4WD =>
+            S.W := S.W * 0.97 + 0.05 * (Near (-Sp.A, 0.55) + Near (Sp.B, 0.55));
+            if Z > 0.25 then
+               declare
+                  T : constant Float := Float'Min (1.0, (Z - 0.25) / 1.2);
+                  Fall : constant Float :=
+                    Float'Max (0.0, (Z - 1.45) / (Last_Profile_Z - 1.45));
+                  Top : constant Float := 1.25 - 0.015 * T;
+               begin
+                  --  Roof carried back, then down the tailgate
+                  S.Roof := Float'Max (S.Belt, Top - 0.38 * Fall ** 1.3);
+                  S.Roof_W := 0.57 + 0.02 * T - 0.08 * Fall;
+               end;
+            end if;
+      end case;
+      return S;
    end At_Z;
 
    Ring_Points : constant := 12;
@@ -137,7 +190,7 @@ package body Car_Model is
    begin
       for I in 0 .. Slices loop
          declare
-            S : constant Station := At_Z (Z_Of (I));
+            S : constant Station := At_Z (Z_Of (I), Kind);
          begin
             for K in 0 .. Ring_Points - 1 loop
                P (I, K) := Ring_Point (S, K);
@@ -162,7 +215,7 @@ package body Car_Model is
       for I in 0 .. Slices - 1 loop
          declare
             Zm : constant Float := Z_Of (I) + (Last_Z - First_Z) / Float (Slices) * 0.5;
-            S : constant Station := At_Z (Zm);
+            S : constant Station := At_Z (Zm, Kind);
             Cabin : constant Boolean := S.Roof > S.Belt + 0.05;
          begin
             for K in 0 .. Ring_Points - 2 loop
@@ -179,12 +232,15 @@ package body Car_Model is
                   Is_Under : constant Boolean := K = 0;
                   --  Side windows above the belt, between the pillars
                   Side_Glass : constant Boolean :=
-                    Cabin and then K in 7 .. 8 and then Zm > -0.62 and then Zm < 1.05;
+                    Cabin and then K in 7 .. 8 and then Zm > -0.62
+                    and then Zm < (if Kind = Rally_4WD then 1.62 else 1.05);
                   Windscreen : constant Boolean :=
                     Cabin and then K >= 8 and then Zm > -0.80 and then Zm < -0.12
                     and then Mid.X < 0.55;
                   Rear_Glass : constant Boolean :=
-                    Cabin and then K >= 8 and then Zm > 0.62 and then Zm < 1.28
+                    Cabin and then K >= 8
+                    and then Zm > (if Kind = Rally_4WD then 1.68 else 0.62)
+                    and then Zm < (if Kind = Rally_4WD then 2.14 else 1.28)
                     and then Mid.X < 0.48;
                   Grille : constant Boolean :=
                     Zm < -2.16 and then K in 3 .. 4 and then Mid.X < 0.62;
@@ -324,11 +380,23 @@ package body Car_Model is
                   Box (B, (X0, 0.44, -2.40), (X0 + 0.16, 0.56, -2.31), (1.0, 1.0, 0.85), Glow);
                end;
             end loop;
-            Box (B, (-0.82, 1.03, 2.04), (0.82, 1.07, 2.40), (0.04, 0.04, 0.05));
-            Box (B, (-0.75, 0.90, 2.15), (-0.70, 1.04, 2.28), (0.04, 0.04, 0.05));
-            Box (B, (0.70, 0.90, 2.15), (0.75, 1.04, 2.28), (0.04, 0.04, 0.05));
+            Box (B, (-0.62, 1.21, 1.52), (0.62, 1.25, 1.92), (0.04, 0.04, 0.05));
             Box (B, (-0.60, 0.11, -2.30), (0.60, 0.15, -1.0), (0.32, 0.33, 0.35), Metal);
             Box (B, (-0.62, 0.28, 2.23), (-0.42, 0.38, 2.34), (0.12, 0.12, 0.13), Metal);
+         when Classic_RWD =>
+            --  Chrome bumpers and a single exhaust
+            Box (B, (-0.80, 0.34, 2.28), (0.80, 0.44, 2.36), (0.5, 0.5, 0.52), Metal);
+            Box (B, (-0.80, 0.30, -2.40), (0.80, 0.40, -2.30), (0.5, 0.5, 0.52), Metal);
+            Box (B, (0.42, 0.24, 2.23), (0.54, 0.32, 2.40), (0.15, 0.15, 0.16), Metal);
+         when Hyper_AWD =>
+            --  Splitter, diffuser, a low wing and side intakes
+            Box (B, (-1.0, 0.07, -2.44), (1.0, 0.10, -1.9), Black);
+            Box (B, (-0.8, 0.14, 2.1), (0.8, 0.28, 2.38), Black);
+            Box (B, (-1.05, 0.92, 2.08), (1.05, 0.95, 2.42), (0.03, 0.03, 0.035));
+            Box (B, (-0.7, 0.78, 2.2), (-0.65, 0.93, 2.3), (0.03, 0.03, 0.035));
+            Box (B, (0.65, 0.78, 2.2), (0.7, 0.93, 2.3), (0.03, 0.03, 0.035));
+            Box (B, (-1.14, 0.42, 0.50), (-1.04, 0.62, 0.90), Black);
+            Box (B, (1.04, 0.42, 0.50), (1.14, 0.62, 0.90), Black);
          when Road_GT =>
             --  Exhausts
             Box (B, (-0.62, 0.28, 2.23), (-0.42, 0.38, 2.34), (0.12, 0.12, 0.13), Metal);
@@ -452,12 +520,31 @@ package body Car_Model is
             (Right_X, 0.81, -0.80), (Left_X, 0.81, -0.80), Dash);
       Quad (B, (Left_X, 0.79, -0.40), (Left_X, 0.45, -0.32), (Right_X, 0.45, -0.32),
             (Right_X, 0.79, -0.40), Trim);
-      --  The instrument binnacle, in front of the driver
-      Box (B, (Steering_X - 0.17, 0.78, -0.60), (Steering_X + 0.17, 0.87, -0.46), Dash);
-      Box (B, (Steering_X - 0.14, 0.78, -0.46), (Steering_X + 0.14, 0.86, -0.45), (0.01, 0.01, 0.012));
-      --  Gauge faces glowing softly
-      Box (B, (Steering_X - 0.12, 0.795, -0.449), (Steering_X - 0.015, 0.85, -0.448), (0.03, 0.035, 0.04), Glow);
-      Box (B, (Steering_X + 0.015, 0.795, -0.449), (Steering_X + 0.12, 0.85, -0.448), (0.03, 0.035, 0.04), Glow);
+      --  The instrument binnacle, in the opening of the wheel: a rev counter,
+      --  a speedometer and the gear between them, drawn live by the shader
+      Box (B, (Steering_X - 0.15, 0.78, -0.60), (Steering_X + 0.15, 0.925, -0.50), Dash);
+      Oriented_Box (B, (Steering_X, 0.933, -0.52), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0), 0.155, 0.008, 0.05, Pillar);
+      declare
+         N : constant Vec3 := (0.0, 0.0, 1.0);
+         procedure Dial (X0, Y0, Half, Which : Float) is
+            Z : constant := -0.4985;
+            Lo_L : constant Vec3 := (Steering_X + X0 - Half, Y0 - Half, Z);
+            Lo_R : constant Vec3 := (Steering_X + X0 + Half, Y0 - Half, Z);
+            Hi_R : constant Vec3 := (Steering_X + X0 + Half, Y0 + Half, Z);
+            Hi_L : constant Vec3 := (Steering_X + X0 - Half, Y0 + Half, Z);
+         begin
+            Add (B, (Lo_L, N, Which, 0.0, 0.0, Mesh.Dial, 0.0, 0.0));
+            Add (B, (Lo_R, N, Which, 0.0, 0.0, Mesh.Dial, 1.0, 0.0));
+            Add (B, (Hi_R, N, Which, 0.0, 0.0, Mesh.Dial, 1.0, 1.0));
+            Add (B, (Lo_L, N, Which, 0.0, 0.0, Mesh.Dial, 0.0, 0.0));
+            Add (B, (Hi_R, N, Which, 0.0, 0.0, Mesh.Dial, 1.0, 1.0));
+            Add (B, (Hi_L, N, Which, 0.0, 0.0, Mesh.Dial, 0.0, 1.0));
+         end Dial;
+      begin
+         Dial (-0.088, 0.858, 0.058, 0.0);
+         Dial (0.088, 0.858, 0.058, 1.0);
+         Dial (0.0, 0.858, 0.027, 2.0);
+      end;
 
       --  Doors
       Box (B, (-0.98, 0.3, -0.45), (-0.82, 0.86, 1.0), Trim);
@@ -487,7 +574,7 @@ package body Car_Model is
       --  Rear of the cabin
       Quad (B, (-0.8, 0.86, 1.1), (0.8, 0.86, 1.1), (0.55, 1.18, 1.0), (-0.55, 1.18, 1.0), Pillar);
 
-      if Kind /= Road_GT then
+      if Kind in Race_GT3 | Rally_4WD then
          --  Roll cage
          Oriented_Box (B, (0.0, 1.13, 0.05), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0), 0.68, 0.025, 0.025, (0.6, 0.6, 0.62));
          Oriented_Box (B, (-0.55, 1.0, 0.45), (0.1, 0.1, 1.0), (0.0, 1.0, 0.0), 0.6, 0.025, 0.025, (0.6, 0.6, 0.62));
@@ -497,7 +584,7 @@ package body Car_Model is
 
    --  The steering wheel: a rim round the Z axis, the driver looks along -Z
    procedure Steering_Wheel (B : in out Builder; Kind : Car_Kind) is
-      R : constant Float := (if Kind = Race_GT3 then 0.155 else 0.185);
+      R : constant Float := (if Kind in Race_GT3 | Hyper_AWD then 0.155 else 0.185);
       Th : constant := 0.016;
       Segs : constant := 36;
       Sides : constant := 8;
@@ -544,7 +631,9 @@ package body Car_Model is
             Body_B, Wheel_B, Cock_B, Steer_B : Builder;
          begin
             Loft (Body_B, K);
-            Wheel (Wheel_B, S.Radius, (if K = Race_GT3 then 0.30 else 0.26));
+            Wheel (Wheel_B, S.Radius, (case K is when Race_GT3 | Hyper_AWD => 0.30,
+                                                  when Classic_RWD => 0.19,
+                                                  when others => 0.26));
             Cockpit (Cock_B, K);
             Steering_Wheel (Steer_B, K);
             Meshes (K) := (Upload (Body_B), Upload (Wheel_B), Upload (Cock_B), Upload (Steer_B));

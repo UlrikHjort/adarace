@@ -2,7 +2,7 @@
 --  Copyright (c) 2026 Ulrik Hørlyk Hjort
 --  SPDX-License-Identifier: MIT
 --
---  Video recording (F9): the game's picture into an MP4 in
+--  Video recording (F9): the game's picture and sound into an MP4 in
 --  ~/Videos/AdaRace, encoded by ffmpeg.
 
 package Recorder is

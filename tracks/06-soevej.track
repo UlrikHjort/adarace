@@ -1,0 +1,22 @@
+# An AdaRace road.  One setting a line, then the points it runs through, closed
+# back to the first: x  z  height  half-width  banking (metres, degrees; banking
+# is positive when the right side is lower).  See "Your own roads" in the README.
+name Soevej (rally stage)
+kind stage
+finish 400 500
+# Wide and fast along the lake, with crests that lift the car
+points
+       0        0     10   4.2     0
+     300       40     12   4.2     0
+     600      -30     19   4.2     0
+     900       60     13   4.2     1
+    1200        0     21   4.2     0
+    1450      120     25   4.2     2
+    1500      350     19   4.2     2
+    1300      520     15   4.2     1
+    1000      480     23   4.2     0
+     700      560     17   4.2    -1
+     400      500     13   4.2     0
+     150      420     12   4.2     0
+     -50      250     10   4.2     0
+    -120      100     10   4.2     0

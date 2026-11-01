@@ -17,6 +17,7 @@ with GNAT.OS_Lib;
 with Interfaces.C;
 with System;
 
+with Audio;
 with GL;
 
 package body Recorder is
@@ -52,6 +53,7 @@ package body Recorder is
    Started  : Ada.Real_Time.Time;
    Written  : Natural := 0;
    Base     : Unbounded_String;   --  output file without extension
+   With_Sound : Boolean := False;
    Note     : Unbounded_String;
 
    function Q (S : String) return String is ("'" & S & "'");
@@ -113,6 +115,10 @@ package body Recorder is
          Note := To_Unbounded_String ("Could not start ffmpeg");
          return;
       end if;
+      With_Sound := Audio.Playing;
+      if With_Sound then
+         Audio.Start_Capture (To_String (Base) & ".audio.raw");
+      end if;
       Started := Ada.Real_Time.Clock;
       Written := 0;
       Note := To_Unbounded_String ("Recording to " & To_String (Base) & ".mp4");
@@ -165,12 +171,22 @@ package body Recorder is
       pragma Unreferenced (R);
       Pipe := System.Null_Address;
       Free (Pixels);
-      --  into its final file, in the background
+      if With_Sound then
+         Audio.Stop_Capture;
+      end if;
+      --  picture and sound into the final file, in the background
       declare
          Cmd : constant String :=
-           "ffmpeg -loglevel error -y -i " & Q (B & ".video.mkv")
-           & " -c copy -movflags +faststart " & Q (B & ".mp4")
-           & " && rm -f " & Q (B & ".video.mkv");
+           --  (a moment for the sound file to be closed)
+           (if With_Sound then
+              "sleep 1; ffmpeg -loglevel error -y -i " & Q (B & ".video.mkv")
+              & " -f s16le -ar 44100 -ac 2 -i " & Q (B & ".audio.raw")
+              & " -c:v copy -c:a aac -b:a 192k -shortest -movflags +faststart "
+              & Q (B & ".mp4") & " && rm -f " & Q (B & ".video.mkv") & " " & Q (B & ".audio.raw")
+            else
+              "ffmpeg -loglevel error -y -i " & Q (B & ".video.mkv")
+              & " -c copy -movflags +faststart " & Q (B & ".mp4")
+              & " && rm -f " & Q (B & ".video.mkv"));
          Args : GNAT.OS_Lib.Argument_List :=
            (new String'("-c"), new String'(Cmd));
          Pid  : GNAT.OS_Lib.Process_Id;

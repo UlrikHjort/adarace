@@ -1,6 +1,7 @@
 # Build output
 /bin/
 /obj/
+/dist/
 *.ali
 *.o
 *.stderr
@@ -13,3 +14,5 @@ b__*
 .*.swp
 .vscode/
 .idea/
+# Made on your machine by scripts/make_voice.sh: a voice has its own licence
+/sounds/

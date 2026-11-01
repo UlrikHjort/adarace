@@ -583,7 +583,9 @@ package body Session is
          Down_Per_V2 => 0.5 * 1.2 * (Spec.Cl_F + Spec.Cl_R) / Spec.Mass,
          Power_Per_Mass => 0.9 * (case S.Kind is when Road_GT => 310_000.0,
                                                  when Race_GT3 => 410_000.0,
-                                                 when Rally_4WD => 230_000.0) / Spec.Mass,
+                                                 when Rally_4WD => 230_000.0,
+                                                 when Classic_RWD => 155_000.0,
+                                                 when Hyper_AWD => 510_000.0) / Spec.Mass,
          Drag_Per_V2 => 0.5 * 1.2 * Spec.Cd_A / Spec.Mass,
          Brake_Acc => Spec.Mu * 9.81 * 0.62 * Condition_Grip (Spec)
            * (if Track.Is_Stage then Spec.Loose_Mu * 0.78 else 1.0));

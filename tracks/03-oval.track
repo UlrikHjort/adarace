@@ -1,0 +1,21 @@
+# An AdaRace road.  One setting a line, then the points it runs through, closed
+# back to the first: x  z  height  half-width  banking (metres, degrees; banking
+# is positive when the right side is lower).  See "Your own roads" in the README.
+name Kalvoe Speedway
+kind circuit
+# A banked oval, flat out if you dare
+points
+     0.0      0.0    5.0   8.0   3.0
+   300.0      0.0    5.0   8.0   3.0
+   520.0     30.0    5.0   8.5  14.0
+   650.0    160.0    5.0   9.0  20.0
+   650.0    340.0    5.0   9.0  20.0
+   520.0    470.0    5.0   8.5  14.0
+   300.0    500.0    5.0   8.0   3.0
+     0.0    500.0    5.0   8.0   3.0
+  -300.0    500.0    5.0   8.0   3.0
+  -520.0    470.0    5.0   8.5  14.0
+  -650.0    340.0    5.0   9.0  20.0
+  -650.0    160.0    5.0   9.0  20.0
+  -520.0     30.0    5.0   8.5  14.0
+  -300.0      0.0    5.0   8.0   3.0

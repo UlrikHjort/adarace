@@ -30,9 +30,18 @@ All of it is the game itself with the AI driver at the wheel, made by
 
 ## Getting started
 
+**Download:** take the Linux package from [Releases](../../releases), unpack it and run
+`./adarace`; `README-FIRST.txt` says what it needs. Or build it yourself:
+
     make run
 
-Needs GNAT, gprbuild, GtkAda, libepoxy, PulseAudio and OpenGL 4.5.
+That needs GNAT, gprbuild, GtkAda, libepoxy and PulseAudio. `make check` says what is missing
+and how to install it. On Debian, Ubuntu and Mint:
+
+    sudo apt install gnat gprbuild libgtkada-dev libgtk-3-dev libepoxy-dev libpulse-dev pkg-config
+
+The game needs a graphics card with OpenGL 4.5. A Logitech G29 is found by itself, and the
+keyboard always works. `ffmpeg` is optional, for F9 recordings and the co-driver's voice.
 
 ## How this was made
 
@@ -68,13 +77,17 @@ Physics run at 1 kHz in an Ada task of their own, independent of the frame rate.
   wheel goes light at the limit, with kerbs, road surface and impacts on top.
   Sent at 125 Hz.
 
-Three cars: a road GT, a GT3 with slicks and wings, and a four wheel drive rally car.
-Three circuits: Søndersø Ring (4.9 km), Monte Ferro (3.2 km, 64 m of climb) and Kalvø
-Speedway (3.2 km, banked oval), and the Skovvej forest rally stage (about 5 km).
+Five cars: a road GT, a GT3 with slicks and wings, a four wheel drive rally car, a light
+classic and a mid-engined hypercar. Three circuits: Søndersø Ring (4.9 km), Monte Ferro
+(3.2 km, 64 m of climb) and Kalvø Speedway (3.2 km, banked oval), and three rally stages.
 
 Hot laps against the ghost of your best lap, which is kept per car and circuit
 in `~/.local/share/adarace`, or races against up to seven AI cars on the same
 physics. A lap with all four wheels off the track does not count.
+
+The cars have their own shapes: the GT3 low with flared arches, the R4 a tall hatchback.
+From the cockpit, live gauges replace the speed panel. Bodywork crumples and scratches with
+damage, and collects mud, dust or road salt on loose ground, which rain washes off.
 
 ## Controls
 
@@ -90,6 +103,7 @@ physics. A lap with all four wheels off the track does not count.
 | | G | ghost |
 | | H | panels |
 | | L | driving line |
+| | B | co-driver's voice |
 | Square | R | back on the track (the lap is lost; +15 s on a stage) |
 | + / - or dial | + / - | force feedback strength |
 | R3 (press again for the front) | W (hold) | look back |
@@ -97,7 +111,7 @@ physics. A lap with all four wheels off the track does not count.
 | | [ / ] | field of view |
 | Options | Esc | pause; then F5 / Square restarts, F10 / Circle goes to the menu |
 | | F11 | fullscreen |
-| | F9 | record a video, F9 again stops (saved in `~/Videos/AdaRace`, needs ffmpeg) |
+| | F9 | record a video with sound, F9 again stops (saved in `~/Videos/AdaRace`, needs ffmpeg) |
 
 In the menu the d-pad moves between rows and changes values, and X starts.
 Choices are remembered in `~/.adaracerc`.
@@ -158,11 +172,38 @@ about 5 km of gravel road through a forest, timed from the lights to the finish 
 - **Nordic R4:** four wheel drive with a centre differential and long-travel suspension.
 - **Co-driver:** arrows at the top of the screen, read from the road's shape: L/R, then
   1 (hairpin) to 6 (nearly flat), LONG, and crests. Next corner on the left.
+- **Spoken calls:** the same notes read out over the intercom ("right four long, over
+  crest"), early enough to act on. `make run` makes the voice on your machine with Piper or
+  espeak-ng (`scripts/make_voice.sh`); the clips are not in git, because a voice has its own
+  licence. B turns it off.
 - **Trees are solid** and hurt the car. R puts you back on the road at +15 s and repairs
   nothing. Short cuts don't count: the stage only finishes along the road.
 
 The road continues beyond the finish back to the start (it closes the loop in the data),
 but a stage ends at the finish, and the marshals brake the car.
+
+Mode *Rally* runs every stage in turn: Skovvej, Granbakken (tight, with hairpins) and Søvej
+(wide and fast). Your times add up against five crews whose pace follows the AI strength, and
+damage goes with you, half of it mended at each service.
+
+## Your own roads
+
+Roads are text files in `tracks/`, read at start in the order of their names, so a new circuit
+or stage needs no code. `tracks/04-skovvej.track` is a good one to start from:
+
+    name My Road
+    kind stage             # or circuit
+    finish 400 500         # a stage only: where the clock stops
+    points
+    #    x      z  height  half-width  banking
+         0      0      10         4.2        0
+       300     40      12         4.2        0
+    ...
+
+The points are in metres and join into a closed loop, so a stage has a road home after its
+finish. Banking is in degrees, positive when the right side is lower. Keep parts of the road
+40 m apart and corners over about 12 m radius. A bad file is left out with a message naming
+the line, and `make test` drives the AI round everything in the folder.
 
 ## Driving school and coach
 
@@ -186,8 +227,8 @@ AI's, so a good driver can beat them.
 
 ## Development
 
-`main` should always build and pass `make test`. Work happens on a branch per feature or
-fix (`feature/spoken-co-driver`, `fix/wiper-blade`), merged through a pull request.
+`main` should always build and pass `make test`, which GitHub checks on every pull request.
+Work happens on a branch per feature or fix. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Licence
 

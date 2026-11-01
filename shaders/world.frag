@@ -11,6 +11,7 @@ in vec3 vNormal;
 in vec3 vColor;
 flat in float vMat;
 in vec2 vUV;
+in vec3 vLocal;
 
 uniform vec3 uCamPos;
 uniform vec3 uSunDir;
@@ -24,6 +25,11 @@ uniform float uAlpha;
 uniform float uShadows;
 uniform float uGrain;
 uniform float uForest;
+uniform float uDirt;
+uniform float uDent;
+uniform float uDialRpm;
+uniform float uDialSpeed;
+uniform float uDialGear;
 uniform float uWet;
 uniform float uSnow;
 uniform float uSeason;      // 0 summer, 1 autumn, 2 winter, 3 spring
@@ -108,6 +114,61 @@ vec3 bump(sampler2D map, vec2 uv, vec3 n, float strength)
     return normalize(n - strength * vec3(g.x, 0.0, g.y));
 }
 
+// An instrument: value 0 .. 1 swept from lower left to lower right
+vec3 gauge(vec2 uv, float value, float redFrom)
+{
+    vec2 q = (uv - 0.5) * 2.0;
+    float r = length(q);
+    if (r > 1.0) discard;
+    float ang = atan(q.x, q.y);            // 0 up, + to the right
+    const float sweep = 2.35;
+    vec3 c = vec3(0.012);
+    float w = fwidth(r) + fwidth(ang);
+    // Ticks round the rim
+    float t = (ang + sweep) / (2.0 * sweep);
+    if (t >= 0.0 && t <= 1.0 && r > 0.74 && r < 0.93) {
+        float major = abs(fract(t * 10.0 + 0.5) - 0.5);
+        if (major < 0.07 + w) c = t >= redFrom ? vec3(1.2, 0.08, 0.05) : vec3(0.85);
+        else if (r > 0.86 && abs(fract(t * 50.0 + 0.5) - 0.5) < 0.09 + w * 5.0)
+            c = t >= redFrom ? vec3(0.8, 0.05, 0.03) : vec3(0.35);
+    }
+    // The needle
+    float a = -sweep + 2.0 * sweep * clamp(value, 0.0, 1.0);
+    vec2 dir = vec2(sin(a), cos(a));
+    float along = dot(q, dir);
+    float across = abs(dot(q, vec2(dir.y, -dir.x)));
+    if (along > -0.12 && along < 0.86 && across < 0.028 + w * 0.5) c = vec3(1.25, 0.28, 0.08);
+    if (r < 0.1) c = vec3(0.09);
+    if (r > 0.96) c = vec3(0.25);
+    return c;
+}
+
+// The gear, in seven segments
+vec3 sevenSeg(vec2 uv, float gear)
+{
+    vec2 p = uv * vec2(1.0, 1.0);
+    vec3 c = vec3(0.01);
+    // Segments a to g: which digits light each, bits 0 .. 9, then n and r
+    float on = 0.0;
+    int d = gear < 0.0 ? 11 : (gear == 0.0 ? 10 : int(gear));
+    const int seg[7] = int[7](0x3ed, 0x39f, 0x7fb, 0x36d, 0xd45, 0x371, 0xf7c);
+    vec2 h = abs(p - vec2(0.5, 0.82)) ;   // top
+    if (h.x < 0.22 && h.y < 0.05 && ((seg[0] >> d) & 1) == 1) on = 1.0;
+    h = abs(p - vec2(0.74, 0.66));
+    if (h.x < 0.05 && h.y < 0.15 && ((seg[1] >> d) & 1) == 1) on = 1.0;
+    h = abs(p - vec2(0.74, 0.34));
+    if (h.x < 0.05 && h.y < 0.15 && ((seg[2] >> d) & 1) == 1) on = 1.0;
+    h = abs(p - vec2(0.5, 0.18));
+    if (h.x < 0.22 && h.y < 0.05 && ((seg[3] >> d) & 1) == 1) on = 1.0;
+    h = abs(p - vec2(0.26, 0.34));
+    if (h.x < 0.05 && h.y < 0.15 && ((seg[4] >> d) & 1) == 1) on = 1.0;
+    h = abs(p - vec2(0.26, 0.66));
+    if (h.x < 0.05 && h.y < 0.15 && ((seg[5] >> d) & 1) == 1) on = 1.0;
+    h = abs(p - vec2(0.5, 0.5));
+    if (h.x < 0.22 && h.y < 0.05 && ((seg[6] >> d) & 1) == 1) on = 1.0;
+    return mix(c, vec3(1.3, 0.75, 0.12), on);
+}
+
 void main()
 {
     float mat = vMat;
@@ -115,6 +176,15 @@ void main()
     vec3 V = uCamPos - vPos;
     float dist = length(V);
     V /= dist;
+
+    // Instruments light themselves
+    if (mat == 20.0) {
+        vec3 c = vColor.r < 0.5 ? gauge(vUV, uDialRpm, 0.8)
+               : vColor.r < 1.5 ? gauge(vUV, uDialSpeed, 2.0)
+               : sevenSeg(vUV, uDialGear);
+        fragColor = vec4(c * uAlpha, uAlpha);
+        return;
+    }
 
     // The driving line: dashes, lit by themselves, by the speed against it
     if (mat == 19.0) {
@@ -344,6 +414,30 @@ void main()
         float lum = dot(vColor, vec3(0.3, 0.6, 0.1));
         albedo = mix(vColor, lum > 0.45 ? vec3(0.03) : vec3(0.62), ink);
         gloss = 0.12;
+    }
+
+    // Mud, dust or road salt on the car, worst low down; scratches where it was hit
+    if (uGrain < 0.5 && (mat == 5.0 || mat == 7.0 || mat == 0.0 || mat == 6.0)) {
+        if (uDent > 0.0 && mat == 5.0) {
+            float ends = smoothstep(1.1, 2.1, abs(vLocal.z));
+            float scr = noise(vec2(vLocal.z * 3.0 + vLocal.x * 40.0, vLocal.y * 30.0));
+            float mark = smoothstep(0.72, 0.8, scr) * ends * uDent * 1.5;
+            albedo = mix(albedo, vec3(0.28, 0.27, 0.26), clamp(mark, 0.0, 1.0));
+            gloss *= 1.0 - 0.8 * clamp(mark, 0.0, 1.0);
+            fres *= 1.0 - 0.8 * clamp(mark, 0.0, 1.0);
+        }
+        if (uDirt > 0.001) {
+            float low = 1.0 - smoothstep(0.25, 1.15, vLocal.y);
+            float n = fbm(vLocal.xz * vec2(1.5, 0.8) + vLocal.y * 2.5 + 11.0);
+            float reach = uDirt * (0.35 + 1.0 * low) * (mat == 6.0 ? 0.35 : 1.0);
+            float cover = smoothstep(1.0 - reach, 1.0 - reach + 0.22, n + 0.25 * low);
+            vec3 mud = uSnow > 0.5 ? vec3(0.5, 0.5, 0.52)
+                     : uWet > 0.5 ? vec3(0.07, 0.05, 0.03)
+                     : vec3(0.26, 0.20, 0.13);
+            albedo = mix(albedo, mud * (0.8 + 0.4 * noise(vLocal.zy * 25.0)), cover);
+            gloss *= 1.0 - 0.9 * cover;
+            fres *= 1.0 - 0.9 * cover;
+        }
     }
 
     // Rain: dark, shining ground and standing water

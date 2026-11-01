@@ -24,7 +24,9 @@ package body Vehicle is
      (case K is
          when Road_GT  => "Nordic GT 420 (road)",
          when Race_GT3 => "Nordic GT3 (slicks, wings)",
-         when Rally_4WD => "Nordic R4 (rally, four wheel drive)");
+         when Rally_4WD => "Nordic R4 (rally, four wheel drive)",
+         when Classic_RWD => "Nordic 1600 (light classic, rear drive)",
+         when Hyper_AWD => "Nordic Hyper (mid-engined, 540 kW)");
 
    function Spec_Of (K : Car_Kind) return Spec is
      (case K is
@@ -73,7 +75,39 @@ package body Vehicle is
             Clutch_Max => 900.0, Brake_Max => 6200.0, Brake_Bias => 0.58,
             Cd_A => 0.78, Cl_F => 0.08, Cl_R => 0.14,
             Steer_Lock => 0.64,
-            Paint_R => 0.74, Paint_G => 0.76, Paint_B => 0.80));
+            Paint_R => 0.74, Paint_G => 0.76, Paint_B => 0.80),
+         when Classic_RWD =>
+           (Mass => 1080.0, Inertia => 1800.0, Pitch_I => 1500.0, Roll_I => 420.0,
+            A => 1.18, B => 1.22, Track_F => 1.42, Track_R => 1.42, H_Cg => 0.46,
+            K_F => 28_000.0, K_R => 28_000.0, C_F => 2_200.0, C_R => 2_300.0,
+            Arb_F => 12_000.0, Arb_R => 8_000.0,
+            Radius => 0.31, Wheel_I => 1.0,
+            Mu => 0.98, Load_Sens => 0.06, Slip_X => 0.13, Slip_Y => 0.16, Rho_Shape => 1.25,
+            Rear_Mu => 1.08, Rear_Stiff => 1.45, Loose_Mu => 0.62, Wet_Loss => 0.24, Snow_Keep => 0.50,
+            Engine => (100.0, 190.0, 240.0, 265.0, 275.0, 270.0, 250.0, 210.0, 130.0, 60.0),
+            Engine_I => 0.16, Idle => 850.0, Red_Line => 6800.0,
+            Gears => (3.3, 2.1, 1.5, 1.18, 0.96, 0.82), Final => 3.7, Reverse_R => 3.2,
+            Lsd_Preload => 30.0, Lsd_Ramp => 0.2, Front_Share => 0.0, Stop_Comp => 0.16,
+            Clutch_Max => 500.0, Brake_Max => 5800.0, Brake_Bias => 0.62,
+            Cd_A => 0.68, Cl_F => 0.02, Cl_R => 0.03,
+            Steer_Lock => 0.55,
+            Paint_R => 0.03, Paint_G => 0.20, Paint_B => 0.11),
+         when Hyper_AWD =>
+           (Mass => 1320.0, Inertia => 2100.0, Pitch_I => 2100.0, Roll_I => 540.0,
+            A => 1.42, B => 1.26, Track_F => 1.70, Track_R => 1.68, H_Cg => 0.40,
+            K_F => 120_000.0, K_R => 135_000.0, C_F => 7_000.0, C_R => 7_000.0,
+            Arb_F => 55_000.0, Arb_R => 40_000.0,
+            Radius => 0.35, Wheel_I => 1.5,
+            Mu => 1.30, Load_Sens => 0.11, Slip_X => 0.09, Slip_Y => 0.11, Rho_Shape => 1.30,
+            Rear_Mu => 1.10, Rear_Stiff => 1.35, Loose_Mu => 0.50, Wet_Loss => 0.34, Snow_Keep => 0.38,
+            Engine => (200.0, 380.0, 520.0, 620.0, 680.0, 720.0, 740.0, 740.0, 680.0, 400.0),
+            Engine_I => 0.15, Idle => 1100.0, Red_Line => 8500.0,
+            Gears => (3.0, 2.2, 1.72, 1.4, 1.18, 1.0), Final => 3.2, Reverse_R => 3.0,
+            Lsd_Preload => 100.0, Lsd_Ramp => 0.4, Front_Share => 0.3, Stop_Comp => 0.10,
+            Clutch_Max => 1300.0, Brake_Max => 9500.0, Brake_Bias => 0.60,
+            Cd_A => 0.82, Cl_F => 0.55, Cl_R => 0.80,
+            Steer_Lock => 0.50,
+            Paint_R => 0.74, Paint_G => 0.58, Paint_B => 0.04));
 
    function Tuned (K : Car_Kind; T : Setup) return Spec is
       S : Spec := Spec_Of (K);
@@ -101,7 +135,7 @@ package body Vehicle is
       else (1.0 - Track.Wet * S.Wet_Loss) * (1.0 - Track.Snow * (1.0 - (0.35 + 0.6 * S.Snow_Keep))));
 
    function Fuel_Per_Km (K : Car_Kind) return Float is
-     (case K is when Road_GT => 0.27, when Race_GT3 => 0.33, when Rally_4WD => 0.27);
+     (case K is when Road_GT => 0.27, when Race_GT3 => 0.33, when Rally_4WD => 0.27, when Classic_RWD => 0.16, when Hyper_AWD => 0.39);
 
    function Speed (C : Car) return Float is
      (Sqrt (C.Vx * C.Vx + C.Vy * C.Vy));

@@ -2,8 +2,11 @@
 --  Copyright (c) 2026 Ulrik Hørlyk Hjort
 --  SPDX-License-Identifier: MIT
 --
+with Ada.Directories;
 with Ada.Exceptions;
 with Ada.Numerics.Elementary_Functions;
+with Ada.Streams.Stream_IO;
+with Ada.Strings.Unbounded;
 with Ada.Text_IO;
 with Interfaces;
 with Interfaces.C;
@@ -46,6 +49,110 @@ package body Audio is
 
    procedure PA_Free (S : System.Address)
      with Import, Convention => C, External_Name => "pa_simple_free";
+
+   --  The co-driver's words, read once at the start
+   type Clip is array (Natural range <>) of aliased Integer_16 with Convention => C;
+   type Clip_Access is access Clip;
+   Clips : array (Codriver.Word) of Clip_Access;
+
+   procedure Load_Clips is
+      use Ada.Streams.Stream_IO;
+   begin
+      for W in Codriver.Word loop
+         declare
+            Name : constant String := Codriver.File_Name (W);
+            F : File_Type;
+         begin
+            if Ada.Directories.Exists (Name) then
+               Open (F, In_File, Name);
+               declare
+                  Samples : constant Natural := Natural (Size (F)) / 2;
+                  use Ada.Streams;
+               begin
+                  if Samples > 0 then
+                     Clips (W) := new Clip (0 .. Samples - 1);
+                     declare
+                        Bytes : Stream_Element_Array (1 .. Stream_Element_Offset (Samples * 2))
+                          with Import, Address => Clips (W).all'Address;
+                        Last : Stream_Element_Offset;
+                     begin
+                        Read (F, Bytes, Last);
+                     end;
+                  end if;
+               end;
+               Close (F);
+            end if;
+         exception
+            when others => null;   --  a word missing is no reason to stop
+         end;
+      end loop;
+   end Load_Clips;
+
+   type Word_List is array (1 .. 24) of Codriver.Word;
+
+   protected Voice_Queue is
+      procedure Put (W : Codriver.Word);
+      procedure Take (W : out Codriver.Word; Got : out Boolean);
+   private
+      Q : Word_List;
+      N : Natural := 0;
+   end Voice_Queue;
+
+   protected body Voice_Queue is
+      procedure Put (W : Codriver.Word) is
+      begin
+         if N < Q'Last then
+            N := N + 1;
+            Q (N) := W;
+         end if;
+      end Put;
+      procedure Take (W : out Codriver.Word; Got : out Boolean) is
+      begin
+         W := Codriver.Finish;
+         Got := N > 0;
+         if Got then
+            W := Q (1);
+            Q (1 .. N - 1) := Q (2 .. N);
+            N := N - 1;
+         end if;
+      end Take;
+   end Voice_Queue;
+
+   Cap_Rate : constant Float := 0.85;   --  the level of a recording
+
+   protected Capture_Req is
+      procedure Ask (Name : String);
+      procedure Finish;
+      procedure Take (Open_It, Close_It : out Boolean;
+                      Name : out Ada.Strings.Unbounded.Unbounded_String);
+   private
+      Want_Open, Want_Close : Boolean := False;
+      File_Name : Ada.Strings.Unbounded.Unbounded_String;
+   end Capture_Req;
+
+   protected body Capture_Req is
+      procedure Ask (Name : String) is
+      begin
+         File_Name := Ada.Strings.Unbounded.To_Unbounded_String (Name);
+         Want_Open := True;
+         Want_Close := False;
+      end Ask;
+      procedure Finish is
+      begin
+         Want_Close := True;
+      end Finish;
+      procedure Take (Open_It, Close_It : out Boolean;
+                      Name : out Ada.Strings.Unbounded.Unbounded_String) is
+      begin
+         Open_It := Want_Open;
+         Close_It := Want_Close;
+         Name := File_Name;
+         Want_Open := False;
+         Want_Close := False;
+      end Take;
+   end Capture_Req;
+
+   Mixer_Up : Boolean := False with Atomic;
 
    protected Shared is
       procedure Put (P : Params);
@@ -164,6 +271,16 @@ package body Audio is
       Beep_P : Float := 0.0;
       Beep_F : Float := 800.0;
       Rumble_P : Float := 0.0;
+      Talking : Clip_Access := null;
+      Talk_At : Natural := 0;
+      Talk_Gap : Natural := 0;     --  a breath between words
+      Duck_S : Float := 1.0;       --  the rest drops while it speaks
+      Turbo_P, Spool_S, Pop_E, Stone_E, Drop_E, Rain_S : Float := 0.0;
+      Wiper_P : Float := 0.0;
+      Grav_F, Stone_F, Rain_F, Drop_F, Pop_F, Swish_F : Filter;
+      Cap_File : Ada.Streams.Stream_IO.File_Type;
+      Cap_On : Boolean := False;
+      Cap_Buffer : aliased Sample_Array;
       Block_Peak : Float := 0.0;
       type Phase_Array is array (Voice_List'Range) of Float;
       V_Phase : Phase_Array := (others => 0.0);
@@ -172,7 +289,9 @@ package body Audio is
       SName : C.Strings.chars_ptr := C.Strings.New_String ("car");
    begin
       select
-         accept Go;
+         accept Go do
+            Load_Clips;
+         end Go;
       or
          terminate;
       end select;
@@ -180,7 +299,24 @@ package body Audio is
                         Spec'Access, System.Null_Address, Attr'Access, Err'Access);
       C.Strings.Free (Name);
       C.Strings.Free (SName);
+      Mixer_Up := Stream /= System.Null_Address;
       while Stream /= System.Null_Address and then not Shared.Stopping loop
+         declare
+            Open_It, Close_It : Boolean;
+            Name : Ada.Strings.Unbounded.Unbounded_String;
+         begin
+            Capture_Req.Take (Open_It, Close_It, Name);
+            if Close_It and then Cap_On then
+               Ada.Streams.Stream_IO.Close (Cap_File);
+               Cap_On := False;
+            end if;
+            if Open_It and then not Cap_On then
+               Ada.Streams.Stream_IO.Create
+                 (Cap_File, Ada.Streams.Stream_IO.Out_File,
+                  Ada.Strings.Unbounded.To_String (Name));
+               Cap_On := True;
+            end if;
+         end;
          declare
             P : constant Params := Shared.Get;
             Hit_S : Float;
@@ -210,30 +346,51 @@ package body Audio is
                Smooth (Rumble_S, P.Rumble, K * 2.0);
                Smooth (Dirt_S, P.Dirt, K);
                Smooth (Scrape_S, P.Scrape, K);
+               Smooth (Rain_S, P.Rain, K * 0.2);
+               Smooth (Spool_S, Load_S * Float'Min (1.0, Rpm_S / 5000.0), 0.0006);
                declare
                   Crank_F : constant Float := Rpm_S / 60.0;
-                  --  A V8: four firings per turn, unevenly loud between banks
-                  Phase_Firing : constant Float := Crank * 4.0;
+                  --  Firings per turn of the crank: the V8 burbles unevenly
+                  --  between its banks, the V10 screams clean and high, the
+                  --  turbo four is a flat, hard drone with the blower over it
+                  Fire : constant Float :=
+                    (case P.Engine is when V8 => 4.0, when V10 => 5.0, when Turbo_Four | Old_Four => 2.0);
+                  Uneven : constant Float :=
+                    (case P.Engine is when V8 => 1.0, when V10 => 0.15, when Turbo_Four => 0.4, when Old_Four => 0.7);
+                  Hard : constant Float :=
+                    (case P.Engine is when V8 => 0.18, when V10 => 0.55, when Turbo_Four => 0.42, when Old_Four => 0.3);
+                  Phase_Firing : constant Float := Crank * Fire;
                   Pulse : constant Float :=
                     Sin (Two_Pi * Phase_Firing)
                     + 0.55 * Sin (Two_Pi * Phase_Firing * 2.0 + 0.7)
                     + 0.30 * Sin (Two_Pi * Phase_Firing * 3.0 + 1.9)
-                    + 0.18 * Sin (Two_Pi * Phase_Firing * 5.0)
-                    + 0.35 * Sin (Two_Pi * Crank * 2.0 + 0.3)
-                    + 0.22 * Sin (Two_Pi * Crank);
+                    + Hard * Sin (Two_Pi * Phase_Firing * 5.0)
+                    + Uneven * 0.35 * Sin (Two_Pi * Crank * 2.0 + 0.3)
+                    + Uneven * 0.22 * Sin (Two_Pi * Crank);
                   Lump : constant Float :=
-                    1.0 + 0.3 * Sin (Two_Pi * Crank) * (1.0 - Load_S * 0.6);
+                    1.0 + Uneven * 0.3 * Sin (Two_Pi * Crank) * (1.0 - Load_S * 0.6);
                   Rough : constant Float := White * (0.08 + 0.3 * Load_S);
                   Raw : constant Float := (Pulse * Lump + Rough * 1.2) * (0.25 + 0.75 * Load_S);
                   --  The exhaust resonates; the note hardens with the revs
-                  Res1 : constant Float := Run (Exh1, Raw, 180.0 + Rpm_S * 0.05, 0.55);
-                  Res2 : constant Float := Run (Exh2, Raw, 700.0 + Rpm_S * 0.18, 0.75);
+                  Pitch : constant Float :=
+                    (case P.Engine is when V8 => 1.0, when V10 => 1.5, when Turbo_Four => 0.85, when Old_Four => 1.1);
+                  Res1 : constant Float := Run (Exh1, Raw, (180.0 + Rpm_S * 0.05) * Pitch, 0.55);
+                  Res2 : constant Float := Run (Exh2, Raw, (700.0 + Rpm_S * 0.18) * Pitch, 0.75);
                   Clip : constant Float :=
                     (Res1 * 0.55 + Res2 * (0.15 + 0.3 * Load_S)) * 0.8;
                   Eng : constant Float := Clip / (1.0 + abs Clip * 0.6);
                   Whine_S : constant Float :=
                     0.03 * Sin (Two_Pi * Whine) * Float'Min (1.0, Rpm_S / 6000.0);
 
+                  --  The blower whistling up, and what it does on a lift
+                  Whistle : constant Float :=
+                    (if P.Engine = Turbo_Four
+                     then 0.045 * Spool_S * Sin (Two_Pi * Turbo_P)
+                     else 0.0);
+                  --  Unburnt fuel popping in the exhaust on the overrun
+                  Pop : constant Float :=
+                    (if P.Engine in V8 | Old_Four then 0.0
+                     else Run (Pop_F, White * 3.0, 420.0, 0.3) * Pop_E);
                   W1 : constant Float := White;
                   Tyre : constant Float :=
                     Run (Tyre_F, W1, 850.0 + 250.0 * Squeal_S + 100.0 * Sin (Two_Pi * Crank * 0.03), 0.09)
@@ -245,8 +402,26 @@ package body Audio is
                     Run (Road_F, White, 70.0 + Speed_S * 1.6, 0.8) * Float'Min (0.35, Speed_S / 120.0);
                   Rib : constant Float :=
                     (if Rumble_P < 0.5 then 1.0 else -1.0) * 0.28 * Rumble_S;
+                  --  A loose road: a roar of grit, stones ticking under the
+                  --  floor; on snow only a low, soft crunch
+                  Grit : constant Float := Dirt_S * Float'Min (1.0, Speed_S / 15.0);
                   Gravel : constant Float :=
-                    White * 0.22 * Dirt_S * Float'Min (1.0, Speed_S / 15.0);
+                    Run (Grav_F, White, (if P.Snowy then 420.0 else 1500.0), 0.7)
+                    * 0.34 * Grit
+                    + (if P.Snowy then 0.0
+                       else Run (Stone_F, White, 3400.0, 0.2) * 0.4 * Stone_E);
+                  --  Rain on the roof, and the odd big drop
+                  Rain_N : constant Float :=
+                    (Run (Rain_F, White, 6000.0, 0.5) * 0.10
+                     + Run (Drop_F, White, 2400.0, 0.25) * 0.3 * Drop_E)
+                    * Rain_S * (if P.Inside then 1.5 else 0.7);
+                  --  The wipers: a swish each way, a soft thunk at the end
+                  Wiper_Pos : constant Float := Sin (Two_Pi * Wiper_P);
+                  Swish : constant Float :=
+                    (if P.Wipers and then P.Inside
+                     then Run (Swish_F, White, 1100.0, 0.4) * 0.05 * (1.0 - Wiper_Pos * Wiper_Pos)
+                          + 0.03 * Sin (Two_Pi * 90.0 * Wiper_P) * Float'Max (0.0, abs Wiper_Pos - 0.97) * 30.0
+                     else 0.0);
                   Scr : constant Float :=
                     Run (Scrape_F, White, 2300.0, 0.25) * 0.3 * Scrape_S;
                   Bang : constant Float :=
@@ -254,14 +429,39 @@ package body Audio is
                   Clk : constant Float := White * 0.3 * Clunk_E * Clunk_E;
                   Bp : constant Float := Sin (Two_Pi * Beep_P) * 0.22 * Beep_E;
                   Eng_Gain : constant Float := (if P.Inside then 0.75 else 0.6);
+                  Spoken : Float := 0.0;
                   Mono0 : constant Float :=
-                    Eng * Eng_Gain + Whine_S + Tyre + Wind + Road + Rib + Gravel + Scr + Bang + Clk + Bp;
+                    Eng * Eng_Gain + Whine_S + Whistle + Pop * 0.5 + Tyre + Wind + Road + Rib
+                    + Gravel + Rain_N + Swish + Scr + Bang + Clk + Bp;
                   Left, Right : Float;
                begin
                   --  From inside the cockpit the top end is duller
                   Low_In := Low_In + (Mono0 - Low_In) * (if P.Inside then 0.5 else 0.85);
-                  Left := Low_In;
-                  Right := Low_In;
+                  if Talking = null and then Talk_Gap = 0 then
+                     declare
+                        W : Codriver.Word;
+                        Got : Boolean;
+                     begin
+                        Voice_Queue.Take (W, Got);
+                        if Got and then Clips (W) /= null then
+                           Talking := Clips (W);
+                           Talk_At := Talking'First;
+                        end if;
+                     end;
+                  elsif Talk_Gap > 0 then
+                     Talk_Gap := Talk_Gap - 1;
+                  end if;
+                  if Talking /= null then
+                     Spoken := Float (Talking (Talk_At)) / 32768.0 * 1.0;
+                     Talk_At := Talk_At + 1;
+                     if Talk_At > Talking'Last then
+                        Talking := null;
+                        Talk_Gap := Rate / 25;
+                     end if;
+                  end if;
+                  Smooth (Duck_S, (if Talking /= null then 0.55 else 1.0), 0.001);
+                  Left := Low_In * Duck_S + Spoken;
+                  Right := Low_In * Duck_S + Spoken;
 
                   --  The others
                   for V in Voice_List'Range loop
@@ -290,6 +490,29 @@ package body Audio is
                   if Whine > 1.0 then
                      Whine := Whine - 1.0;
                   end if;
+                  Turbo_P := Turbo_P + (1400.0 + 5200.0 * Spool_S) / Float (Rate);
+                  if Turbo_P > 1.0 then
+                     Turbo_P := Turbo_P - 1.0;
+                  end if;
+                  --  (the visual wipers go 2.6 radians a second)
+                  Wiper_P := Wiper_P + (2.6 / Two_Pi) / Float (Rate);
+                  if Wiper_P > 1.0 then
+                     Wiper_P := Wiper_P - 1.0;
+                  end if;
+                  Pop_E := Pop_E * 0.9985;
+                  if Load_S < 0.12 and then Rpm_S > 3800.0
+                    and then (White + 1.0) * 0.5 < 0.00035 * Float'Min (1.0, Rpm_S / 6000.0)
+                  then
+                     Pop_E := 0.5 + 0.5 * (White + 1.0) * 0.5;
+                  end if;
+                  Stone_E := Stone_E * 0.994;
+                  if (White + 1.0) * 0.5 < Grit * Float'Min (40.0, Speed_S * 1.5) / Float (Rate) then
+                     Stone_E := 0.4 + 0.3 * (White + 1.0);
+                  end if;
+                  Drop_E := Drop_E * 0.992;
+                  if (White + 1.0) * 0.5 < 45.0 * Rain_S / Float (Rate) then
+                     Drop_E := 0.3 + 0.35 * (White + 1.0);
+                  end if;
                   Rumble_P := Rumble_P + Float'Max (20.0, Speed_S / 1.5) / Float (Rate);
                   if Rumble_P > 1.0 then
                      Rumble_P := Rumble_P - 1.0;
@@ -302,7 +525,14 @@ package body Audio is
                   Clunk_E := Clunk_E * 0.997;
                   Beep_E := Beep_E * 0.99985;
 
+                  --  A soft limit: no sudden noise ever clips hard
+                  Left := Left / (1.0 + 0.3 * abs Left);
+                  Right := Right / (1.0 + 0.3 * abs Right);
                   Block_Peak := Float'Max (Block_Peak, Float'Max (abs Left, abs Right));
+                  Cap_Buffer (2 * I) :=
+                    Integer_16 (Float'Max (-1.0, Float'Min (1.0, Left * Cap_Rate)) * 32000.0);
+                  Cap_Buffer (2 * I + 1) :=
+                    Integer_16 (Float'Max (-1.0, Float'Min (1.0, Right * Cap_Rate)) * 32000.0);
                   Left := Left * P.Master;
                   Right := Right * P.Master;
                   Buffer (2 * I) := Integer_16 (Float'Max (-1.0, Float'Min (1.0, Left)) * 32000.0);
@@ -311,11 +541,24 @@ package body Audio is
             end loop;
          end;
          Shared.Set_Peak (Block_Peak);
+         if Cap_On then
+            declare
+               use Ada.Streams;
+               Bytes : Stream_Element_Array (1 .. Stream_Element_Offset (Frames * 4))
+                 with Import, Address => Cap_Buffer'Address;
+            begin
+               Stream_IO.Write (Cap_File, Bytes);
+            end;
+         end if;
          Block_Peak := 0.0;
          if PA_Write (Stream, Buffer'Address, C.size_t (Frames * 4), Err'Access) < 0 then
             exit;
          end if;
       end loop;
+      Mixer_Up := False;
+      if Cap_On then
+         Ada.Streams.Stream_IO.Close (Cap_File);
+      end if;
       if Stream /= System.Null_Address then
          PA_Free (Stream);
       end if;
@@ -358,6 +601,32 @@ package body Audio is
    begin
       Shared.Tone (High);
    end Beep;
+
+   procedure Start_Capture (File : String) is
+   begin
+      Capture_Req.Ask (File);
+   end Start_Capture;
+
+   procedure Stop_Capture is
+   begin
+      Capture_Req.Finish;
+   end Stop_Capture;
+
+   function Playing return Boolean is (Mixer_Up);
+
+   procedure Speak (W : Codriver.Word) is
+   begin
+      Voice_Queue.Put (W);
+   end Speak;
+
+   function Has_Voice return Boolean is
+      Any : Boolean := False;
+   begin
+      for C of Clips loop
+         Any := Any or else C /= null;
+      end loop;
+      return Any;
+   end Has_Voice;
 
    function Peak return Float is (Shared.Get_Peak);
 

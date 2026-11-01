@@ -1,0 +1,40 @@
+# AdaRace: a driving simulator in Ada
+# Copyright (c) 2026 Ulrik Hørlyk Hjort
+# SPDX-License-Identifier: MIT
+#
+# On every push to main and every pull request: install what AdaRace needs,
+# build the game, run the headless tests and look over the shell scripts.
+# (The game itself needs OpenGL 4.5 and a screen, so it is not run here.)
+
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the compiler and the libraries
+        run: |
+          sudo apt-get update
+          GTKADA=$(apt-cache search --names-only '^libgtkada[0-9.]*-dev$' | awk '{print $1}' | sort -V | tail -1)
+          sudo apt-get install -y gnat gprbuild "${GTKADA:-libgtkada-dev}" libgtk-3-dev \
+            libepoxy-dev libpulse-dev pkg-config shellcheck
+
+      - name: Check what is needed
+        run: scripts/check_deps.sh
+
+      - name: Build the game
+        run: make game
+
+      - name: Run the tests
+        run: make test
+
+      - name: Look over the shell scripts
+        run: shellcheck -S error scripts/*.sh

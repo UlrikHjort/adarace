@@ -14,7 +14,7 @@ package Vehicle is
 
    Dt : constant := 0.001;
 
-   type Car_Kind is (Road_GT, Race_GT3, Rally_4WD);
+   type Car_Kind is (Road_GT, Race_GT3, Rally_4WD, Classic_RWD, Hyper_AWD);
 
    function Name (K : Car_Kind) return String;
 

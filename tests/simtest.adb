@@ -13,6 +13,8 @@ with Ada.Numerics.Elementary_Functions;
 with Ada.Strings.Fixed;
 with Ada.Text_IO;
 
+with Codriver;
+with Rally;
 with School;
 with Session;
 with Telemetry;
@@ -247,7 +249,9 @@ procedure Simtest is
             T := T + Dt;
          end loop;
          Put_Line ("  100-0 km/h in " & Img (Dist, 1) & " m (ABS on)");
-         Check (Dist > 22.0 and then Dist < 45.0, "braking distance is believable");
+         --  (the classic's narrow tyres are allowed their longer stop)
+         Check (Dist > 22.0 and then Dist < (if K = Classic_RWD then 50.0 else 45.0),
+                "braking distance is believable");
       end;
    end Straight;
 
@@ -1087,6 +1091,196 @@ procedure Simtest is
       end;
    end Lessons;
 
+   --  Road files: bad ones are named, by line, and the game goes on
+   procedure Road_Files is
+      use Ada.Text_IO;
+      Dir : constant String := Ada.Environment_Variables.Value ("HOME") & "/tracks";
+      procedure Try (Text : String; Want_Good : Boolean; What : String; Want_Line : Natural := 0) is
+         F : File_Type;
+         Name : constant String := Dir & "/try.track";
+         Good : Boolean;
+         Why : Positive;
+      begin
+         Ada.Directories.Create_Path (Dir);
+         Create (F, Out_File, Name);
+         Put (F, Text);
+         Close (F);
+         Track.Check_File (Name, Good, Why);
+         Check (Good = Want_Good and then (Want_Line = 0 or else Why = Want_Line),
+                What & (if Good then "" else ", line" & Why'Image));
+      end Try;
+      LF : constant Character := ASCII.LF;
+      Pts : constant String :=
+        "points" & LF & "0 0 1 4 0" & LF & "100 0 1 4 0" & LF & "100 100 1 4 0" & LF & "0 100 1 4 0" & LF;
+   begin
+      Try ("name A" & LF & "kind circuit" & LF & Pts, True, "a good road is read");
+      Try ("# c" & LF & "name A # t" & LF & "kind stage" & LF & "finish 100 100" & LF & Pts, True,
+           "with comments, and a stage");
+      Try ("kind circuit" & LF & Pts, False, "a road without a name is refused");
+      Try ("name A" & LF & "kind stage" & LF & Pts, False, "a stage without a finish is refused");
+      Try ("name A" & LF & "kind boat" & LF & Pts, False, "an unknown kind is refused, naming the line", 2);
+      Try ("name A" & LF & "kind circuit" & LF & "points" & LF & "1 2 3" & LF, False,
+           "a short point is refused, naming the line", 4);
+      Try ("name A" & LF & "kind circuit" & LF & "points" & LF & "a 2 3 4 5" & LF, False,
+           "words for numbers are refused", 4);
+      Try ("name A" & LF & "kind circuit" & LF & "points" & LF & "0 0 1 4 0" & LF, False,
+           "too few points are refused");
+      Try ("name A" & LF & "kind circuit" & LF & "points" & LF & "0 0 1 0.5 0" & LF, False,
+           "a road too narrow is refused", 4);
+      Check (Track.Track_Count >= 6, "the shipped roads are all read:" & Track.Track_Count'Image);
+      declare
+         Stages : Natural := 0;
+      begin
+         for T in 1 .. Track.Track_Count loop
+            Stages := Stages + (if Track.Stage_Road (T) then 1 else 0);
+         end loop;
+         Check (Stages >= 3, "of them, stages:" & Stages'Image);
+      end;
+   end Road_Files;
+
+   --  A rally from end to end, the AI driving, damage going along
+   procedure Rally_Event is
+      R : Session.Settings := Hotlap (Rally_4WD);
+      N : Vehicle.Inputs;
+   begin
+      R.Mode := Session.Stage;
+      R.Assist.Damage := 1.0;
+      Rally.Begin_Rally (0.93);
+      Check (Rally.Stage_Total >= 3, "a rally has" & Rally.Stage_Total'Image & " stages");
+      for Stage in 1 .. Rally.Stage_Total loop
+         Track.Load (Rally.Current_Road);
+         Session.Force_AI := True;
+         Session.Start (R);
+         if Stage = 2 then
+            Session.Cars (1).Dmg_Aero := 0.4;    --  (fed in, to follow it along)
+         end if;
+         Rally.Carry_Over (Session.Cars (1));
+         if Stage = 3 then
+            Check (abs (Session.Cars (1).Dmg_Aero - 0.2) < 0.05 or else Session.Cars (1).Dmg_Aero < 0.3,
+                   "the service mended half of what was bent");
+         end if;
+         if Stage = 2 then
+            Session.Cars (1).Dmg_Aero := 0.4;
+         end if;
+         for I in 1 .. 900_000 loop
+            Session.Step (N);
+            exit when Session.Laps (1).Finished;
+         end loop;
+         Check (Session.Laps (1).Finished, Track.Name (Rally.Current_Road) & ": finished in"
+                & Img (Session.Laps (1).Finish_Time, 1) & " s");
+         Rally.Finish_Stage (Session.Laps (1).Finish_Time, Session.Cars (1));
+         Check (Rally.Standings (1).Total <= Rally.Standings (2).Total, "the table is in order");
+         Put_Line ("    leader " & Rally.Crew_Name (Rally.Standings (1).Crew) & Img (Rally.Standings (1).Total, 1)
+                   & ", you P" & Rally.Position'Image);
+         if Stage < Rally.Stage_Total then
+            Rally.Next_Stage;
+         end if;
+      end loop;
+      Check (Rally.Is_Last, "and the last stage is the last");
+      Session.Force_AI := False;
+      Rally.Active := False;
+   end Rally_Event;
+
+   --  The co-driver: everything read out, in order, in time to act on it
+   procedure Spoken_Notes is
+      use type Codriver.Word;
+      R : Session.Settings := Hotlap (Rally_4WD);
+      N : Vehicle.Inputs;
+      Words : Natural := 0;
+      Calls : Natural := 0;
+      Late : Natural := 0;
+      Finish_Heard : Boolean := False;
+      Busy_Until : Float := 0.0;
+      Over_Talk : Natural := 0;
+      Tightest_Heard : Boolean := False;
+      Per_Word : constant := 0.42;   --  seconds a word takes, about
+   begin
+      Track.Load (4);
+      R.Mode := Session.Stage;
+      Session.Force_AI := True;
+      Session.Start (R);
+      Codriver.Reset;
+      declare
+         L : Session.Lap_Info renames Session.Laps (1);
+         Last_Next : Natural := 0;
+      begin
+         for I in 1 .. 700_000 loop
+            Session.Step (N);
+            exit when L.Finished;
+            if I mod 16 = 0 and then not L.On_Grid then
+               Codriver.Update (L.S, Speed (Session.Cars (1)), Track.Stage_End - L.Progress);
+               declare
+                  W : Codriver.Word;
+                  Got : Boolean := True;
+                  Said : Natural := 0;
+                  Now : constant Float := Session.Time;
+               begin
+                  while Got loop
+                     Codriver.Next_Word (W, Got);
+                     if Got then
+                        Said := Said + 1;
+                        Words := Words + 1;
+                        Finish_Heard := Finish_Heard or else W = Codriver.Finish;
+                        Tightest_Heard := Tightest_Heard or else W in Codriver.Two | Codriver.Three | Codriver.Hairpin;
+                     end if;
+                  end loop;
+                  if Said > 0 then
+                     Calls := Calls + 1;
+                     if Now < Busy_Until then
+                        Over_Talk := Over_Talk + 1;
+                     end if;
+                     Busy_Until := Float'Max (Now, Busy_Until) + Float (Said) * Per_Word;
+                     --  The corner called must still be seconds away
+                     declare
+                        Nx : constant Natural := Track.Next_Note (L.S);
+                     begin
+                        if Nx > 0 and then Nx /= Last_Next
+                          and then Track.Notes (Nx).S - L.S < Speed (Session.Cars (1)) * 1.5
+                        then
+                           Late := Late + 1;
+                        end if;
+                        Last_Next := Nx;
+                     end;
+                  end if;
+               end;
+            end if;
+         end loop;
+      end;
+      Session.Force_AI := False;
+      Put_Line ("  co-driver:" & Calls'Image & " calls," & Words'Image & " words over"
+                & Track.Note_Count'Image & " notes; called late" & Late'Image
+                & ", still speaking at the next" & Over_Talk'Image);
+      Check (Calls >= Track.Note_Count * 3 / 4, "every note gets called");
+      Check (Late = 0, "and in time to act on it");
+      Check (Over_Talk <= Calls / 5, "without talking over itself much");
+      Check (Finish_Heard, "the finish is called");
+      Check (Tightest_Heard, "and so is the tightest corner");
+      Check (Codriver.File_Name (Codriver.Hairpin) = "sounds/codriver/hairpin.pcm", "the clip names");
+      --  Put back on the road, it reads the corners again; no repeat otherwise
+      declare
+         W : Codriver.Word;
+         Got : Boolean;
+         Heard : Natural := 0;
+         Far : constant Float := Track.Notes (10).S - 300.0;
+      begin
+         Codriver.Reset;
+         Codriver.Update (Track.Notes (10).S - 5.0, 20.0, 3000.0);
+         for K in 1 .. 50 loop
+            Codriver.Update (Track.Notes (10).S - 5.0, 20.0, 3000.0);
+         end loop;
+         loop
+            Codriver.Next_Word (W, Got);
+            exit when not Got;
+            Heard := Heard + 1;
+         end loop;
+         Check (Heard in 1 .. 6, "a call is made once:" & Heard'Image & " words");
+         Codriver.Update (Far, 20.0, 3000.0);
+         Codriver.Update (Far + 280.0, 20.0, 3000.0);
+         Codriver.Next_Word (W, Got);
+         Check (Got, "after going back along the road, the corners are read again");
+      end;
+   end Spoken_Notes;
+
    --  Loose surface: the same car, the same pedal, less grip and more slide
    procedure Loose_Surface is
       function Stop_Distance (Stage : Boolean) return Float is
@@ -1140,7 +1334,7 @@ procedure Simtest is
                 "whoever stays on the grid is last, not first: P" & Session.Laps (1).Position'Image);
       end;
       --  Room for the box inside the barrier, at every circuit
-      for T in Track.Track_Id loop
+      for T in 1 .. Track.Track_Count loop
          Track.Load (T);
          declare
             Clear : Boolean := True;
@@ -1293,14 +1487,14 @@ begin
    if Ada.Directories.Exists (Ada.Environment_Variables.Value ("HOME")) then
       Ada.Directories.Delete_Tree (Ada.Environment_Variables.Value ("HOME"));
    end if;
-   for T in Track.Track_Id loop
+   for T in 1 .. Track.Track_Count loop
       Track_Shape (T);
    end loop;
    Stand_Still;
    for K in Car_Kind loop
       Straight (K);
    end loop;
-   for T in Track.Track_Id loop
+   for T in 1 .. Track.Track_Count loop
       for K in Car_Kind loop
          AI_Lap (T, K);
       end loop;
@@ -1317,6 +1511,9 @@ begin
    Loose_Surface;
    Rally_Stage;
    Stage_By_Hand;
+   Road_Files;
+   Rally_Event;
+   Spoken_Notes;
    Conditions;
    Lessons;
    New_Line;

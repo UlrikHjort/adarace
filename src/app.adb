@@ -38,11 +38,13 @@ with Gtk.Window;
 with Gdk.Screen;
 
 with Audio;
+with Codriver;
 with Car_Model;
 with GL;
 with GL_Area;
 with Hud;
 with Hud_Layer;
+with Rally;
 with Recorder;
 with Renderer;
 with School;
@@ -60,6 +62,7 @@ package body App is
    use type Gdk.Types.Gdk_Key_Type;
    use type Renderer.Camera_Kind;
    use type Session.Mode_Kind;
+   use type Session.Weather_Kind;
 
    Window : Gtk.Window.Gtk_Window;
    Area   : GL_Area.Gtk_GL_Area;
@@ -98,6 +101,9 @@ package body App is
    procedure Set_Frame_Sync (W : Gdk.Gdk_Window; On : Gboolean)
      with Import, Convention => C, External_Name => "gdk_x11_window_set_frame_sync_enabled";
 
+   Voice_On : Boolean := True;
+   Rally_Auto : Boolean := False;
+   Rally_Wait : Natural := 0;
    Want_Record : Boolean := False;   --  F9: done where the picture is ready
    Record_At, Record_For : Float := 0.0;  --  automated: from when, how long
 
@@ -164,6 +170,7 @@ package body App is
       Item ("aid", Integer (Combo_Aid.Get_Active));
       Item ("weather", Integer (Combo_Weather.Get_Active));
       Item ("season", Integer (Combo_Season.Get_Active));
+      Item ("voice", (if Voice_On then 1 else 0));
       Item ("wear", Integer (Combo_Wear.Get_Active));
       Item ("damage", Integer (Combo_Damage.Get_Active));
       for C in Vehicle.Car_Kind loop
@@ -219,6 +226,7 @@ package body App is
                   elsif N = "aid" then Combo_Aid.Set_Active (G);
                   elsif N = "weather" then Combo_Weather.Set_Active (G);
                   elsif N = "season" then Combo_Season.Set_Active (G);
+                  elsif N = "voice" then Voice_On := V /= 0;
                   elsif N = "wear" then Combo_Wear.Set_Active (G);
                   elsif N = "damage" then Combo_Damage.Set_Active (G);
                   elsif N'Length = 4 and then N (N'First .. N'First + 1) = "su" then
@@ -259,7 +267,7 @@ package body App is
          Knobs (K).Set_Value (Gdouble (Tunes (C) (K)));
       end loop;
       --  (the road car has no wing to set)
-      Knobs (7).Set_Sensitive (C = Vehicle.Race_GT3);
+      Knobs (7).Set_Sensitive (C in Vehicle.Race_GT3 | Vehicle.Hyper_AWD);
    end Show_Knobs;
 
    function Chosen_Setup return Vehicle.Setup is
@@ -307,15 +315,28 @@ package body App is
 
    function In_School return Boolean is (Combo_Mode.Get_Active = 2);
 
+   function In_Rally return Boolean is (Combo_Mode.Get_Active = 3);
+
    function Lesson_Chosen return School.Lesson_Id is
      (School.Lesson_Id (Integer (Combo_Lesson.Get_Active) + 1));
 
    function Drive_Track return Track.Track_Id is
-     (if In_School then School.Circuit (Lesson_Chosen) else Chosen_Track);
+     (if In_School then School.Circuit (Lesson_Chosen)
+      elsif In_Rally then Rally.Current_Road
+      else Chosen_Track);
 
    procedure Begin_Drive is
       S : Session.Settings;
+      Skill : constant Float :=
+        (case Integer (Combo_Skill.Get_Active) is
+            when 0 => 0.80, when 1 => 0.87, when 2 => 0.93, when others => 0.98);
    begin
+      --  A new rally from the menu; from one stage to the next it goes on
+      if In_Rally and then In_Menu then
+         Rally.Begin_Rally (Skill);
+      elsif not In_Rally then
+         Rally.Active := False;
+      end if;
       Store_Knobs;
       Save_Choices;
       Sim_Loop.Halt;
@@ -345,7 +366,11 @@ package body App is
          S := School.Prepare (Lesson_Chosen, S);
       end if;
       Session.Start (S);
+      if In_Rally then
+         Rally.Carry_Over (Session.Cars (1));
+      end if;
       School.Begin_Lesson (if In_School then Lesson_Chosen else 0);
+      Codriver.Reset;
       Area.Make_Current;
       Scenery.Build_Guide;
       Options.Guide := In_School or else Combo_Aid.Get_Active > 0;
@@ -402,6 +427,20 @@ package body App is
          Options.Look := 0.0;
       end if;
    end Toggle_Look_Back;
+
+   --  At the end of a stage of a rally: on to the next, or home after the last
+   procedure Advance_Rally is
+   begin
+      if Rally.Active and then Rally.Finished_Stage then
+         if Rally.Is_Last then
+            Rally.Active := False;
+            To_Menu;
+         else
+            Rally.Next_Stage;
+            Begin_Drive;
+         end if;
+      end if;
+   end Advance_Rally;
 
    procedure Next_Camera is
       use Renderer;
@@ -463,6 +502,11 @@ package body App is
       elsif K = GDK_LC_a then Sim_Loop.Request_Shift (True);
       elsif K = GDK_LC_z then Sim_Loop.Request_Shift (False);
       elsif K = GDK_LC_x then Sim_Loop.Request_Reverse (True);
+      elsif K = GDK_Return then
+         Advance_Rally;
+      elsif K = GDK_LC_b then
+         Voice_On := not Voice_On;
+         Say ((if Voice_On then "Co-driver speaks" else "Co-driver silent"), 1.5);
       elsif K = GDK_F9 then
          Want_Record := True;
       elsif K = GDK_LC_c then Next_Camera;
@@ -576,6 +620,8 @@ package body App is
             end case;
          else
             case B is
+               when Cross | Enter =>
+                  Advance_Rally;
                when Triangle => Next_Camera;
                when Square => Sim_Loop.Reset_Car;
                when Wheel.Options => Toggle_Pause;
@@ -646,6 +692,15 @@ package body App is
                  elsif F.On_Dirt then Float'Min (0.7, F.Speed / 25.0) else 0.0);
       P.Scrape := F.Scrape;
       P.Inside := Renderer.Listener_Inside (Options);
+      P.Engine := (case Session.Config.Kind is
+                      when Vehicle.Road_GT => Audio.V8,
+                      when Vehicle.Race_GT3 => Audio.V10,
+                      when Vehicle.Rally_4WD => Audio.Turbo_Four,
+                      when Vehicle.Classic_RWD => Audio.Old_Four,
+                      when Vehicle.Hyper_AWD => Audio.V10);
+      P.Rain := Track.Wet * (if Session.Config.Weather = Session.Rain then 1.0 else 0.0);
+      P.Snowy := Track.Snow > 0.5;
+      P.Wipers := Session.Config.Weather in Session.Rain | Session.Snowing;
       P.Master := (if In_Menu or else Sim_Loop.Paused then Volume * 0.15 else Volume);
       --  The nearest others
       for I in 2 .. Natural'Min (F.Count, 5) loop
@@ -657,6 +712,23 @@ package body App is
          end;
       end loop;
       Audio.Set (P);
+
+      --  The co-driver reads the road ahead
+      if Session.Config.Mode = Session.Stage and then Voice_On then
+         if not F.Laps (1).On_Grid and then not F.Laps (1).Finished then
+            Codriver.Update (F.Laps (1).S, F.Speed, Track.Stage_End - F.Laps (1).Progress);
+            declare
+               W : Codriver.Word;
+               Got : Boolean;
+            begin
+               loop
+                  Codriver.Next_Word (W, Got);
+                  exit when not Got;
+                  Audio.Speak (W);
+               end loop;
+            end;
+         end if;
+      end if;
 
       if F.Gear /= Last_Gear then
          Audio.Clunk;
@@ -751,6 +823,7 @@ package body App is
             Renderer.Draw (Prev, Cur, Opt, W, H);
             Time_Scene := Time_Scene + (Sim_Loop.Now - T0);
          end;
+         Hud.In_Cockpit := Options.Camera = Renderer.Cockpit;
          if not In_Menu then
             Hud.Draw (Cur, W, H, Msg, (if Env ("ADARACE_FPS") /= "" then Fps_Smooth else 0.0), Show_Panels);
          end if;
@@ -823,7 +896,7 @@ package body App is
          when 360 =>
             Toggle_Pause;
             To_Menu;
-         when 480 => Combo_Track.Set_Active ((Combo_Track.Get_Active + 1) mod Track.Track_Count);
+         when 480 => Combo_Track.Set_Active ((Combo_Track.Get_Active + 1) mod Gint (Track.Track_Count));
          when 600 => Combo_Car.Set_Active ((Combo_Car.Get_Active + 1) mod 2);
          when 640 => Combo_Weather.Set_Active (1);
          when 680 => Combo_Season.Set_Active (2);
@@ -859,6 +932,30 @@ package body App is
       pragma Unreferenced (Widget, Frame_Clock);
    begin
       Wheel_Buttons;
+      --  A stage of a rally finished: its times go on the table
+      if Rally.Active and then not In_Menu and then not Rally.Finished_Stage then
+         declare
+            Prev, Cur : Sim_Loop.Frame;
+         begin
+            Sim_Loop.Latest (Prev, Cur);
+            if Cur.Laps (1).Finished then
+               Rally.Finish_Stage (Cur.Laps (1).Finish_Time, Session.Cars (1));
+            end if;
+         end;
+      end if;
+      --  (for the automated checks) on to the next stage by itself
+      if Rally_Auto and then Rally.Active and then Rally.Finished_Stage then
+         Rally_Wait := Rally_Wait + 1;
+         if Rally_Wait = 240 then
+            Rally_Wait := 0;
+            if Rally.Is_Last then
+               Ada.Text_IO.Put_Line ("rally done, position" & Rally.Position'Image);
+               Gtk.Main.Main_Quit;
+            else
+               Advance_Rally;
+            end if;
+         end if;
+      end if;
       if Self_Test then
          Test_Step;
       end if;
@@ -973,7 +1070,7 @@ package body App is
       Menu.Pack_Start (Grid, False, False);
 
       Gtk_New (Combo_Track);
-      for T in Track.Track_Id loop
+      for T in 1 .. Track.Track_Count loop
          Combo_Track.Append_Text (Track.Name (T));
       end loop;
       Combo_Track.Set_Active (0);
@@ -986,7 +1083,7 @@ package body App is
       Combo_Car.Set_Active (0);
       Add_Row ("Car", Combo_Car);
 
-      Make (Combo_Mode, "Mode", "Hot laps, against your ghost|Race against the AI|Driving school");
+      Make (Combo_Mode, "Mode", "Hot laps, against your ghost|Race against the AI|Driving school|Rally: every stage in turn");
       Gtk_New (Combo_Lesson);
       for L in School.Lesson_Id loop
          Combo_Lesson.Append_Text (School.Title (L));
@@ -1037,7 +1134,7 @@ package body App is
       Gtk.Label.Gtk_New
         (Hint,
          "Wheel: d-pad and X choose, start.  Keys: arrows, A/Z shift, C camera, R back on track," & ASCII.LF
-         & "L line on/off, F9 record, Esc pause, F11 fullscreen.  Rally: choose Skovvej.  Pit box: yellow lines past the start.");
+         & "L line, B co-driver's voice, F9 record, Esc pause, F11 fullscreen.  Rally: choose Skovvej.  Pit box: yellow lines past the start.");
       Hint.Set_Name ("hint");
       Hint.Set_Halign (Gtk.Widget.Align_Start);
       Menu.Pack_Start (Hint, False, False);
@@ -1212,6 +1309,7 @@ package body App is
             Record_At := Float'Value (Env ("ADARACE_RECORD_AT"));
          end if;
       end if;
+      Rally_Auto := Env ("ADARACE_RALLY_AUTO") /= "";
       if Env ("ADARACE_WEATHER") /= "" then
          Combo_Weather.Set_Active (Gint'Value (Env ("ADARACE_WEATHER")));
       end if;
