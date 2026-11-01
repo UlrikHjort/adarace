@@ -76,6 +76,10 @@ Hot laps against the ghost of your best lap, which is kept per car and circuit
 in `~/.local/share/adarace`, or races against up to seven AI cars on the same
 physics. A lap with all four wheels off the track does not count.
 
+The cars have their own shapes: the GT3 low with flared arches, the R4 a tall hatchback.
+From the cockpit, live gauges replace the speed panel. Bodywork crumples and scratches with
+damage, and collects mud, dust or road salt on loose ground, which rain washes off.
+
 ## Controls
 
 | Wheel | Keyboard | |

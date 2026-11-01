@@ -181,6 +181,8 @@ package body Hud is
             Red_At : constant Float := F.Red_Line / (F.Red_Line + 300.0);
             Shift_Now : constant Boolean := F.Rpm > F.Red_Line * 0.96;
          begin
+            --  (from the cockpit the real instruments tell all this)
+            if not In_Cockpit then
             Panel (PX, PY, PW, PH, 0.62);
             for I in 0 .. Bars - 1 loop
                declare
@@ -216,6 +218,7 @@ package body Hud is
             Text ("km/h", PX + 175.0 * S, PY + 102.0 * S, 15.0 * S, 1.0);
             Text (Trim (Natural'Image (Natural (F.Rpm))), PX + PW - 22.0 * S, PY + 64.0 * S, 20.0 * S, 1.0);
             Text ("rpm", PX + PW - 22.0 * S, PY + 84.0 * S, 13.0 * S, 1.0);
+            end if;
             if F.Abs_On then
                Color (1.0, 0.8, 0.1);
                Text ("ABS", PX + 12.0 * S, PY + 58.0 * S, 15.0 * S);

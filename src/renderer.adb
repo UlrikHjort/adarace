@@ -53,6 +53,9 @@ package body Renderer is
    U_Head_Pos, U_Head_Dir : array (1 .. Session.Max_Cars) of GLint := (others => -1);
    K_Mist, P_Rain, P_Time : GLint := -1;
    Guide_On : Boolean := False;
+   U_Dirt, U_Dent, U_Dial_Rpm, U_Dial_Speed, U_Dial_Gear : GLint := -1;
+   Dirt_Level : Float := 0.0;     --  how filthy the player's car has got
+   Dent_Level : Float := 0.0;
    Clock_T : Float := 0.0;
    Car_Speed : Float := 0.0;
    Lights_On : Boolean := False;
@@ -227,6 +230,11 @@ package body Renderer is
       F_Scale := Location (Fx_P, "uPointScale");
       F_Points := Location (Fx_P, "uPoints");
 
+      U_Dirt := Location (World_P, "uDirt");
+      U_Dent := Location (World_P, "uDent");
+      U_Dial_Rpm := Location (World_P, "uDialRpm");
+      U_Dial_Speed := Location (World_P, "uDialSpeed");
+      U_Dial_Gear := Location (World_P, "uDialGear");
       U_Wet := Location (World_P, "uWet");
       U_Snow := Location (World_P, "uSnow");
       U_Season := Location (World_P, "uSeason");
@@ -488,6 +496,8 @@ package body Renderer is
       Shaders.Set (U_Paint, Paint);
       Shaders.Set (U_Brake, P.Brake);
       Shaders.Set (U_Model, M);
+      Shaders.Set (U_Dirt, (if I = 1 then Dirt_Level else 0.15 * Dirt_Level));
+      Shaders.Set (U_Dent, (if I = 1 then Dent_Level else 0.0));
       if Show_Body then
          glEnable (GL_CULL_FACE);
          glCullFace (GL_BACK);
@@ -789,6 +799,8 @@ package body Renderer is
 
       Shaders.Set (U_Grain, Float'(1.0));
       Shaders.Set (U_Forest, Float'(if Track.Is_Stage then 1.0 else 0.0));
+      Shaders.Set (U_Dirt, Float'(0.0));
+      Shaders.Set (U_Dent, Float'(0.0));
       Shaders.Set (U_Wet, Track.Wet);
       Shaders.Set (U_Snow, Track.Snow);
       Shaders.Set (U_Season, Float (Session.Season_Kind'Pos (Session.Config.Season)));
@@ -846,6 +858,8 @@ package body Renderer is
             Shaders.Set (U_Paint, Vec3'(Session.Spec.Paint_R, Session.Spec.Paint_G, Session.Spec.Paint_B));
             Shaders.Set (U_Brake, Float'(0.0));
             Shaders.Set (U_Model, M);
+            Shaders.Set (U_Dirt, Dirt_Level);
+            Shaders.Set (U_Dent, Dent_Level);
             glEnable (GL_CULL_FACE);
             glCullFace (GL_BACK);
             Shaders.Set (U_Grain, Float'(-1.0));
@@ -866,6 +880,8 @@ package body Renderer is
          glEnable (GL_BLEND);
          glBlendFunc (GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
          glDepthMask (GL_FALSE);
+         Shaders.Set (U_Dirt, Float'(0.0));
+         Shaders.Set (U_Dent, Float'(0.0));
          Shaders.Set (U_Alpha, Float'(0.28));
          Shaders.Set (U_Paint, Vec3'(0.6, 0.8, 1.0));
          Shaders.Set (U_Brake, Float'(0.0));
@@ -944,6 +960,19 @@ package body Renderer is
       glGetIntegerv (GL_FRAMEBUFFER_BINDING, GTK_FB'Address);
       Clock_T := Clock_T + Dt;
       Guide_On := Options.Guide;
+      --  Dirt gathers on loose ground and washes off in rain; a fresh start is clean
+      if B.Laps (1).Lap_Time < 0.05 and then B.Laps (1).Lap = 0 then
+         Dirt_Level := 0.0;
+      elsif B.On_Dirt or else B.Off_Road then
+         Dirt_Level := Float'Min (1.0, Dirt_Level + Dt * Float'Min (B.Speed, 30.0) / 30.0 * 0.018);
+      elsif Track.Wet > 0.5 then
+         Dirt_Level := Float'Max (0.0, Dirt_Level - Dt * 0.012);
+      end if;
+      Dent_Level := B.Dmg_Aero;
+      glUseProgram (World_P);
+      Shaders.Set (U_Dial_Rpm, B.Rpm / Float'Max (1000.0, B.Red_Line + 1800.0));
+      Shaders.Set (U_Dial_Speed, B.Speed * 3.6 / 320.0);
+      Shaders.Set (U_Dial_Gear, Float (B.Gear));
       Car_Speed := B.Speed;
       Lights_On := Dim;
       for I in 1 .. B.Count loop

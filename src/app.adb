@@ -784,6 +784,7 @@ package body App is
             Renderer.Draw (Prev, Cur, Opt, W, H);
             Time_Scene := Time_Scene + (Sim_Loop.Now - T0);
          end;
+         Hud.In_Cockpit := Options.Camera = Renderer.Cockpit;
          if not In_Menu then
             Hud.Draw (Cur, W, H, Msg, (if Env ("ADARACE_FPS") /= "" then Fps_Smooth else 0.0), Show_Panels);
          end if;
