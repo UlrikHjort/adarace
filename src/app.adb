@@ -43,6 +43,7 @@ with GL;
 with GL_Area;
 with Hud;
 with Hud_Layer;
+with Recorder;
 with Renderer;
 with School;
 with Scenery;
@@ -96,6 +97,9 @@ package body App is
    Last_Frame_T : Long_Float := 0.0;
    procedure Set_Frame_Sync (W : Gdk.Gdk_Window; On : Gboolean)
      with Import, Convention => C, External_Name => "gdk_x11_window_set_frame_sync_enabled";
+
+   Want_Record : Boolean := False;   --  F9: done where the picture is ready
+   Record_At, Record_For : Float := 0.0;  --  automated: from when, how long
 
    Fps_Smooth : Float := 60.0;
    Late_20, Late_34 : Natural := 0;   --  frames over 20 ms, over 34 ms
@@ -459,6 +463,8 @@ package body App is
       elsif K = GDK_LC_a then Sim_Loop.Request_Shift (True);
       elsif K = GDK_LC_z then Sim_Loop.Request_Shift (False);
       elsif K = GDK_LC_x then Sim_Loop.Request_Reverse (True);
+      elsif K = GDK_F9 then
+         Want_Record := True;
       elsif K = GDK_LC_c then Next_Camera;
       elsif K = GDK_LC_l then
          Options.Guide := not Options.Guide;
@@ -752,6 +758,26 @@ package body App is
             GL.glFinish.all;
          end if;
          Time_All := Time_All + (Sim_Loop.Now - Now_T);
+         if Want_Record then
+            Want_Record := False;
+            if Recorder.Active then
+               Recorder.Stop;
+            else
+               Recorder.Start (W, H);
+            end if;
+            Say (Recorder.Message, 4.0);
+         end if;
+         --  ADARACE_RECORD: start some way into the drive, then leave
+         if Record_For > 0.0 then
+            if not Recorder.Active and then Float (Now_T) >= Record_At then
+               Recorder.Start (W, H);
+            elsif Recorder.Active and then Float (Recorder.Seconds) >= Record_For then
+               Recorder.Stop;
+               Record_For := 0.0;
+               Gtk.Main.Main_Quit;
+            end if;
+         end if;
+         Recorder.Frame (W, H);
          Update_Sound (Cur);
          Frame_Count := Frame_Count + 1;
          if Frame_Count = 60 then
@@ -1011,7 +1037,7 @@ package body App is
       Gtk.Label.Gtk_New
         (Hint,
          "Wheel: d-pad and X choose, start.  Keys: arrows, A/Z shift, C camera, R back on track," & ASCII.LF
-         & "L line on/off, Esc pause, F11 fullscreen.  Rally: choose Skovvej.  Pit box: yellow lines past the start.");
+         & "L line on/off, F9 record, Esc pause, F11 fullscreen.  Rally: choose Skovvej.  Pit box: yellow lines past the start.");
       Hint.Set_Name ("hint");
       Hint.Set_Halign (Gtk.Widget.Align_Start);
       Menu.Pack_Start (Hint, False, False);
@@ -1180,6 +1206,12 @@ package body App is
       if Env ("ADARACE_TIME") /= "" then
          Combo_Time.Set_Active (Gint'Value (Env ("ADARACE_TIME")));
       end if;
+      if Env ("ADARACE_RECORD_FOR") /= "" then
+         Record_For := Float'Value (Env ("ADARACE_RECORD_FOR"));
+         if Env ("ADARACE_RECORD_AT") /= "" then
+            Record_At := Float'Value (Env ("ADARACE_RECORD_AT"));
+         end if;
+      end if;
       if Env ("ADARACE_WEATHER") /= "" then
          Combo_Weather.Set_Active (Gint'Value (Env ("ADARACE_WEATHER")));
       end if;
@@ -1216,6 +1248,7 @@ package body App is
       pragma Unreferenced (Id);
       Gtk.Main.Main;
 
+      Recorder.Stop;
       Sim_Loop.Shutdown;
       Audio.Stop;
    end Run;

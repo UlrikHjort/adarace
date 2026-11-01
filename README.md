@@ -10,6 +10,26 @@ school, night, weather and seasons.
 > and documentation; the author set the direction, drove the game on a real wheel and reported
 > what felt right and what was broken. See [How this was made](#how-this-was-made).
 
+![A forest rally stage](docs/gifs/rally.gif)
+
+| | |
+|---|---|
+| ![The stage at night](docs/gifs/night.gif) | ![The stage in winter](docs/gifs/winter.gif) |
+| Night, on the headlamps | Winter, snow falling |
+| ![Rain from the cockpit](docs/gifs/rain.gif) | ![The start of a race](docs/gifs/race.gif) |
+| Rain, from the cockpit | The start of a race against the AI |
+| ![The driving line in a lesson](docs/gifs/school.gif) | ![Autumn at dawn](docs/screenshots/autumn-dawn.jpg) |
+| The driving school and its coloured line | Autumn at dawn |
+| ![A GT3 in the golden hour](docs/screenshots/gt3-golden.jpg) | ![Fog on the stage](docs/screenshots/rally-fog.jpg) |
+| A GT3 in the golden hour | Fog on the stage |
+| ![A lesson passed](docs/screenshots/lesson-passed.jpg) | ![The menu and car setup](docs/screenshots/menu.jpg) |
+| A lesson passed, with the coach's word | The menu and car setup |
+
+All of it is the game itself with the AI driver at the wheel, made by
+`scripts/make_media.sh`.
+
+## Getting started
+
     make run
 
 Needs GNAT, gprbuild, GtkAda, libepoxy, PulseAudio and OpenGL 4.5.
@@ -77,6 +97,7 @@ physics. A lap with all four wheels off the track does not count.
 | | [ / ] | field of view |
 | Options | Esc | pause; then F5 / Square restarts, F10 / Circle goes to the menu |
 | | F11 | fullscreen |
+| | F9 | record a video, F9 again stops (saved in `~/Videos/AdaRace`, needs ffmpeg) |
 
 In the menu the d-pad moves between rows and changes values, and X starts.
 Choices are remembered in `~/.adaracerc`.
