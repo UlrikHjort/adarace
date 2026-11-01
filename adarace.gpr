@@ -1,0 +1,20 @@
+--  AdaRace: a driving simulator in Ada
+--  Copyright (c) 2026 Ulrik Hørlyk Hjort
+--  SPDX-License-Identifier: MIT
+--
+with "gtkada";
+
+project Adarace is
+   for Source_Dirs use ("src");
+   for Object_Dir use "obj/game";
+   for Exec_Dir use "bin";
+   for Main use ("adarace.adb");
+
+   package Compiler is
+      for Default_Switches ("Ada") use ("-O2", "-gnat2012", "-gnatwa", "-gnatyN", "-gnatwU");
+   end Compiler;
+
+   package Linker is
+      for Default_Switches ("Ada") use ("-lepoxy", "-lpulse-simple", "-lpulse");
+   end Linker;
+end Adarace;

@@ -1,0 +1,15 @@
+# Build output
+/bin/
+/obj/
+*.ali
+*.o
+*.stderr
+*.stdout
+auto.cgpr
+*.bexch
+b__*
+# Editors
+*~
+.*.swp
+.vscode/
+.idea/
