@@ -369,7 +369,8 @@ package body Hud is
             else
                Text ("LAP", X + 14.0 * S, Y, 18.0 * S);
                Color (1.0, 1.0, 1.0);
-               Text (Trim (Natural'Image (L.Lap + 1))
+               Text (Trim (Natural'Image
+                       (if Racing then Natural'Min (L.Lap + 1, Session.Config.Laps) else L.Lap + 1))
                      & (if Racing then " /" & Session.Config.Laps'Image else ""),
                      X + 70.0 * S, Y, 18.0 * S);
             end if;
