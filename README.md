@@ -78,8 +78,9 @@ Physics run at 1 kHz in an Ada task of their own, independent of the frame rate.
   Sent at 125 Hz.
 
 Five cars: a road GT, a GT3 with slicks and wings, a four wheel drive rally car, a light
-classic and a mid-engined hypercar. Three circuits: Søndersø Ring (4.9 km), Monte Ferro
-(3.2 km, 64 m of climb) and Kalvø Speedway (3.2 km, banked oval), and three rally stages.
+classic and a mid-engined hypercar. Four circuits: Søndersø Ring (4.9 km), Monte Ferro
+(3.2 km, 64 m of climb), Kalvø Speedway (3.2 km, banked oval) and the Havnebyen street circuit
+(2.8 km, between walls along a harbour), and three rally stages.
 
 Hot laps against the ghost of your best lap, which is kept per car and circuit
 in `~/.local/share/adarace`, or races against up to seven AI cars on the same
@@ -199,6 +200,9 @@ or stage needs no code. `tracks/04-skovvej.track` is a good one to start from:
          0      0      10         4.2        0
        300     40      12         4.2        0
     ...
+
+A street circuit adds `setting city`: walls at the kerb with a catch fence, street lamps, a
+town of buildings and square corners. `water x z radius` digs a harbour basin there.
 
 The points are in metres and join into a closed loop, so a stage has a road home after its
 finish. Banking is in degrees, positive when the right side is lower. Keep parts of the road

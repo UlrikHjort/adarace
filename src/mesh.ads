@@ -29,6 +29,8 @@ package Mesh is
    Dirt_Road : constant := 18.0; --  Colour: as asphalt; UV: along, across
    Guide   : constant := 19.0;  --  the driving line: Colour.r its speed, U along
    Dial    : constant := 20.0;  --  an instrument: Colour.r which, UV 0 .. 1
+   Facade  : constant := 21.0;  --  a building's front: Colour.r its tint; UV metres
+   Water   : constant := 22.0;
    Board   : constant := 17.0;  --  an advert: colour; U along, V up in metres
 
    type Vertex is record

@@ -1,0 +1,36 @@
+# An AdaRace road.  One setting a line, then the points it runs through, closed
+# back to the first: x  z  height  half-width  banking (metres, degrees; banking
+# is positive when the right side is lower).  See "Your own roads" in the README.
+name Havnebyen (street circuit)
+kind circuit
+setting city
+# The harbour basin south of the quay: centre x z, radius
+water 350 175 165
+# Along the quay, up through the old town in square corners, and back
+points
+       0        0    5.0   6.5     0
+     350        0    5.0   6.5     0
+     700        0    5.0   6.5     0
+     760      -10    5.2   6.5     0
+     780      -60    5.6   6.0     0
+     780     -260    7.5   6.0     0
+     770     -310    8.0   6.0     0
+     720     -330    8.2   6.0     0
+     560     -330    8.6   6.0     0
+     510     -345    8.8   6.0     0
+     490     -390    9.4   5.5     0
+     490     -520   11.0   5.5     0
+     470     -570   11.4   5.5     0
+     420     -590   11.6   5.5     0
+     250     -590   11.2   6.0     0
+     200     -570   10.8   6.0     0
+     180     -520   10.2   6.0     0
+     180     -420    9.0   6.0     0
+     160     -370    8.4   6.0     0
+     110     -350    8.0   6.5     0
+     -60     -350    7.2   6.5     0
+    -110     -330    6.8   6.5     0
+    -130     -280    6.4   6.5     0
+    -130      -60    5.4   6.5     0
+    -110      -15    5.1   6.5     0
+     -60        0    5.0   6.5     0

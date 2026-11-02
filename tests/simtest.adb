@@ -1091,6 +1091,53 @@ procedure Simtest is
       end;
    end Lessons;
 
+   --  A street circuit: walls at the kerb, and no building on the road
+   procedure Street_Circuit is
+      City : Natural := 0;
+   begin
+      for T in 1 .. Track.Track_Count loop
+         Track.Load (T);
+         if Track.Is_City then
+            City := T;
+            exit;
+         end if;
+      end loop;
+      Check (City > 0, "there is a street circuit");
+      if City = 0 then
+         return;
+      end if;
+      declare
+         Close : Boolean := True;
+         Clear : Boolean := True;
+      begin
+         for I in 0 .. Track.Count - 1 loop
+            declare
+               S : Track.Sample renames Track.Samples (I);
+            begin
+               if S.S > Track.Pit_To + 30.0 then
+                  Close := Close and then S.Wall_L - S.W_L < 4.0 and then S.Wall_R - S.W_R < 4.0;
+               end if;
+            end;
+         end loop;
+         Check (Close, "the walls stand close to the road");
+         Check (Track.Buildings'Length > 60, "a town:" & Track.Buildings'Length'Image & " buildings");
+         for B of Track.Buildings.all loop
+            declare
+               H : Natural := Track.Find_Nearest (B.X, B.Z);
+               I : Natural;
+               Tt, D : Float;
+            begin
+               Track.Locate (B.X, B.Z, H, I, Tt, D);
+               Clear := Clear and then abs D - 0.5 * Float'Max (B.Len, B.Depth)
+                 > Float'Max (Track.Samples (I).Wall_L, Track.Samples (I).Wall_R);
+            end;
+         end loop;
+         Check (Clear, "no building stands in the road or its walls");
+         Check (Track.Has_Water and then Track.Water_Y < Track.Samples (0).Y,
+                "the harbour lies below the quay");
+      end;
+   end Street_Circuit;
+
    --  Road files: bad ones are named, by line, and the game goes on
    procedure Road_Files is
       use Ada.Text_IO;
@@ -1512,6 +1559,7 @@ begin
    Rally_Stage;
    Stage_By_Hand;
    Road_Files;
+   Street_Circuit;
    Rally_Event;
    Spoken_Notes;
    Conditions;

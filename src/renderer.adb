@@ -48,7 +48,7 @@ package body Renderer is
    S_LVP, S_Model : GLint := 0;
    K_Inv, K_Cam, K_Sun, K_Sun_C, K_Sky_C, K_Hor, K_Time, K_Clouds : GLint := 0;
    P_Rect, P_Flip, P_Scene, P_Vig, P_Exp : GLint := 0;
-   U_Grain, U_Forest, P_Bloom : GLint := -1;
+   U_Grain, U_Forest, U_City, P_Bloom : GLint := -1;
    U_Wet, U_Snow, U_Season, U_Car_V, U_Head_On, U_Head_N, U_Head_Pow : GLint := -1;
    U_Head_Pos, U_Head_Dir : array (1 .. Session.Max_Cars) of GLint := (others => -1);
    K_Mist, P_Rain, P_Time : GLint := -1;
@@ -256,6 +256,7 @@ package body Renderer is
       P_Time := Location (Post_P, "uTime");
       U_Grain := Location (World_P, "uGrain");
       U_Forest := Location (World_P, "uForest");
+      U_City := Location (World_P, "uCity");
       P_Bloom := Location (Post_P, "uBloom");
       Textures.Create;
       glUseProgram (World_P);
@@ -799,6 +800,7 @@ package body Renderer is
 
       Shaders.Set (U_Grain, Float'(1.0));
       Shaders.Set (U_Forest, Float'(if Track.Is_Stage then 1.0 else 0.0));
+      Shaders.Set (U_City, Float'(if Track.Is_City then 1.0 else 0.0));
       Shaders.Set (U_Dirt, Float'(0.0));
       Shaders.Set (U_Dent, Float'(0.0));
       Shaders.Set (U_Wet, Track.Wet);
