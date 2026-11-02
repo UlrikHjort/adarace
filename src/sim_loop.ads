@@ -53,6 +53,10 @@ package Sim_Loop is
       Dmg_Aero, Dmg_Engine, Toe : Float := 0.0;
       Service_Left : Float := 0.0;
       Service_Offer : Boolean := False;
+      In_Pit_Lane : Boolean := False;
+      Yellow_Ahead : Boolean := False;
+      VSC_Left : Float := 0.0;
+      Penalty : Float := 0.0;
       School   : Standard.School.Status;
       Tip      : String (1 .. Standard.School.Tip_Size) := (others => ' ');
       Tip_Len  : Natural := 0;

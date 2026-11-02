@@ -377,6 +377,17 @@ package body Sim_Loop is
          F.Toe := C.Toe;
          F.Service_Left := Session.Service_Left;
          F.Service_Offer := Session.Service_Offer;
+         F.In_Pit_Lane := Session.In_Pit_Lane;
+         F.VSC_Left := Float'Max (0.0, Session.VSC_Until - Session.Time);
+         F.Penalty := Session.Laps (1).Penalty;
+         declare
+            Here : constant Float := Track.Samples (C.Hint).S;
+            Ahead : constant Float :=
+              (if Session.Yellow_S >= Here then Session.Yellow_S - Here
+               else Session.Yellow_S + Track.Length - Here);
+         begin
+            F.Yellow_Ahead := Session.Yellow_S >= 0.0 and then Ahead < 400.0;
+         end;
          for W in Vehicle.Wheel_Id loop
             F.Temps (W) := C.Wheels (W).Temp;
             F.Slides (W) := C.Wheels (W).Slide;

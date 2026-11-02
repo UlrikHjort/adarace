@@ -57,6 +57,57 @@ package body Session is
          when 8 => (Pace => -0.012, Aggression => 0.6, Defence => 0.7, Mistakes => 0.15, Fatigue => 0.005),
          when others => (Pace => 0.0, Aggression => 0.0, Defence => 0.0, Mistakes => 0.0, Fatigue => 0.0));
 
+   function VSC_On return Boolean is (Time < VSC_Until);
+   function VSC_Pace return Float is (0.6);
+
+   Stopped_T : array (Car_Index) of Float := (others => 0.0);
+   Too_Fast_T : Float := 0.0;
+
+   --  Every twentieth of a second: has someone stopped on the circuit?
+   procedure Watch_Race is
+   begin
+      if Config.Mode /= Race or else not Lights_Out then
+         return;
+      end if;
+      for K in 1 .. Car_Count loop
+         declare
+            L : Lap_Info renames Laps (K);
+         begin
+            if not L.On_Grid and then not L.Finished and then Speed (Cars (K)) < 3.0 then
+               Stopped_T (K) := Stopped_T (K) + 0.05;
+               if Stopped_T (K) > 1.5 then
+                  Yellow_S := Track.Samples (Cars (K).Hint).S;
+                  Yellow_Until := Time + 12.0;
+               end if;
+               if Stopped_T (K) > 5.0 and then not VSC_On then
+                  VSC_Until := Time + 25.0;
+               end if;
+            else
+               Stopped_T (K) := 0.0;
+            end if;
+            if Cars (K).Impact > 16.0 then
+               Yellow_S := Track.Samples (Cars (K).Hint).S;
+               Yellow_Until := Time + 12.0;
+            end if;
+         end;
+      end loop;
+      if Time > Yellow_Until then
+         Yellow_S := -1.0;
+      end if;
+      --  The player under the safety car: too fast for long, five seconds
+      if VSC_On and then not Laps (1).Finished then
+         if Speed (Cars (1)) > VSC_Pace * Track.Samples (Cars (1).Hint).Line_V + 3.0 then
+            Too_Fast_T := Too_Fast_T + 0.05;
+            if Too_Fast_T > 2.0 then
+               Laps (1).Penalty := Laps (1).Penalty + VSC_Penalty;
+               Too_Fast_T := 0.0;
+            end if;
+         else
+            Too_Fast_T := Float'Max (0.0, Too_Fast_T - 0.05);
+         end if;
+      end if;
+   end Watch_Race;
+
    function AI_Drives (I : Car_Index) return Boolean is
      ((I > 1 and then not (Config.Two_Players and then I = 2))
       or else Config.Mode = Demo or else Force_AI);
@@ -295,7 +346,12 @@ package body Session is
             Target : constant Float := Float'Min
               (Track.Samples (Look).Line_V * St.Skill * Tired
                * (1.0 + 0.012 * Ch.Aggression)
-               * (if Rushing then 1.10 else 1.0),
+               * (if Rushing then 1.10 else 1.0)
+               * (if VSC_On then VSC_Pace
+                  elsif Yellow_S >= 0.0
+                    and then (Yellow_S - Here_S >= 0.0 and then Yellow_S - Here_S < 300.0)
+                  then 0.8
+                  else 1.0),
                Slow_Ahead);
             Err : constant Float := Target - Sp;
          begin
@@ -508,7 +564,7 @@ package body Session is
          L.Lap_Time := 0.0;
          if Config.Mode = Race and then L.Lap >= Config.Laps and then not L.Finished then
             L.Finished := True;
-            L.Finish_Time := Time;
+            L.Finish_Time := Time + L.Penalty;
          end if;
       end if;
       L.Last_S := S;
@@ -579,6 +635,12 @@ package body Session is
       Player_Spec := Tuned (Config.Kind, Config.Tune);
       Service_Left := 0.0;
       Service_Offer := False;
+      In_Pit_Lane := False;
+      Yellow_S := -1.0;
+      Yellow_Until := 0.0;
+      VSC_Until := 0.0;
+      Stopped_T := (others => 0.0);
+      Too_Fast_T := 0.0;
       Parked := 0.0;
       Laps := (others => <>);
       Laps (1).Best_Time := Best_Keep;
@@ -749,6 +811,7 @@ package body Session is
          begin
             Track.Locate (Float (C.X), Float (C.Z), Hint, Idx, T, D);
             Service_Offer := Work > 0.0 and then Track.In_Pit_Box (Idx, D);
+            In_Pit_Lane := Track.In_Pit_Lane (Idx, D);
             if Service_Offer and then Speed (C) < 0.8 then
                Parked := Parked + 0.05;
                if Parked >= 1.0 then
@@ -812,6 +875,14 @@ package body Session is
             end if;
             if I = 1 then
                Pit_Service (Hands);
+               --  The limiter in the pit lane
+               if In_Pit_Lane and then Speed (Cars (1)) > Track.Pit_Limit then
+                  Hands.Throttle := 0.0;
+                  if Speed (Cars (1)) > Track.Pit_Limit + 1.0 then
+                     Hands.Brake := Float'Max
+                       (Hands.Brake, Float'Min (0.8, (Speed (Cars (1)) - Track.Pit_Limit) * 0.15));
+                  end if;
+               end if;
             end if;
             if I = 1 then
                Vehicle.Step (Cars (I), Player_Spec, Hands, Config.Assist);
@@ -834,6 +905,7 @@ package body Session is
       end if;
 
       if Tick mod 50 = 0 then
+         Watch_Race;
          Update_Order;
          if Config.Mode in Race | Stage and then Laps (1).Finished then
             Race_Over := True;

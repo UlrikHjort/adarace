@@ -1115,7 +1115,8 @@ procedure Simtest is
             declare
                S : Track.Sample renames Track.Samples (I);
             begin
-               if S.S > Track.Pit_To + 30.0 then
+               --  (but for the pit lane, where the left wall stands beyond it)
+               if not Track.In_Pit_Lane (I, -(S.W_L + S.Kerb_L + 1.0)) and then S.S > Track.Pit_To + 30.0 then
                   Close := Close and then S.Wall_L - S.W_L < 4.0 and then S.Wall_R - S.W_R < 4.0;
                end if;
             end;
@@ -1310,6 +1311,86 @@ procedure Simtest is
              and then Session.Character_Of (4).Defence > 0.9,
              "the rivals differ");
    end Characters;
+
+   --  The pit lane's limiter, and the virtual safety car for a stopped car
+   procedure Flags is
+      R : Session.Settings := Hotlap (Race_GT3);
+      N : Vehicle.Inputs;
+   begin
+      Track.Load (1);
+      R.Mode := Session.Race;
+      R.Opponents := 4;
+      R.Laps := 3;
+      Session.Start (R);
+      --  Into the lane at speed: the limiter holds it
+      declare
+         C : Car renames Session.Cars (1);
+         I : constant Natural := Track.Next (0, -40);
+         P : Track.Sample renames Track.Samples (I);
+         D : constant Float := P.W_L + 2.5;
+         Top : Float := 0.0;
+      begin
+         Place (C, Race_GT3, P.X - P.RX * D, P.Z - P.RZ * D, Arctan (P.TX, -P.TZ));
+         C.Vx := 30.0;
+         for W in Wheel_Id loop
+            C.Wheels (W).Omega := C.Vx / Session.Player_Spec.Radius;
+         end loop;
+         N.Throttle := 1.0;
+         for K in 1 .. 4000 loop
+            Session.Step (N);
+            if K > 2500 then
+               Top := Float'Max (Top, Speed (C));
+            end if;
+         end loop;
+         Check (Session.In_Pit_Lane and then Top < Track.Pit_Limit + 1.5,
+                "the limiter holds the pit lane to 60 km/h:" & Img (Top * 3.6, 0) & " km/h");
+      end;
+      N := (others => <>);
+      --  A rival stops on the track: a yellow flag, then the safety car
+      Session.Start (R);
+      Session.Force_AI := True;
+      for K in 1 .. 25_000 loop
+         Session.Step (N);
+      end loop;
+      declare
+         Stuck : Car renames Session.Cars (5);
+         Before, During : Float := 0.0;
+      begin
+         for K in 2 .. 4 loop
+            Before := Before + Speed (Session.Cars (K));
+         end loop;
+         for K in 1 .. 9000 loop
+            Stuck.Vx := 0.0;
+            Stuck.Vy := 0.0;
+            for W in Wheel_Id loop
+               Stuck.Wheels (W).Omega := 0.0;
+            end loop;
+            Session.Step (N);
+         end loop;
+         Check (Session.VSC_On, "a car stopped on the circuit brings out the safety car");
+         for K in 2 .. 4 loop
+            During := During + Speed (Session.Cars (K));
+         end loop;
+         Put_Line ("    three rivals' speed: before" & Img (Before * 3.6, 0) & ", under the safety car"
+                   & Img (During * 3.6, 0) & " km/h");
+         Check (During < Before * 0.85, "and everyone slows");
+         --  The player, going on as before: a penalty
+         Session.Force_AI := False;
+         N.Throttle := 1.0;
+         for K in 1 .. 6000 loop
+            Session.Step (N);
+         end loop;
+         Check (Session.Laps (1).Penalty >= Session.VSC_Penalty or else Speed (Session.Cars (1)) < 20.0,
+                "too fast under it costs five seconds:" & Img (Session.Laps (1).Penalty, 0) & " s");
+         N := (others => <>);
+         Session.Force_AI := True;
+         for K in 1 .. 40_000 loop
+            Session.Step (N);
+         end loop;
+         Check (not Session.VSC_On, "and it ends, the car moving again");
+      end;
+      Session.Force_AI := False;
+   end Flags;
 
    --  A rally from end to end, the AI driving, damage going along
    procedure Rally_Event is
@@ -1516,12 +1597,13 @@ procedure Simtest is
                declare
                   P : Track.Sample renames Track.Samples (I);
                begin
-                  if P.S in Track.Pit_From .. Track.Pit_To then
+                  if Track.In_Pit_Lane (I, -(P.W_L + P.Kerb_L + 1.0)) then
                      Clear := Clear and then P.W_L + P.Kerb_L + Track.Pit_Wide < P.Wall_L - 0.5;
                   end if;
                end;
             end loop;
-            Check (Clear, "the pit box fits at " & Track.Name (T));
+            Check (Clear and then (Track.Is_Stage or else Track.In_Pit_Lane (0, -(Track.Samples (0).W_L + 2.0))),
+                   "the pit lane fits at " & Track.Name (T));
          end;
       end loop;
       Track.Load (Track.Track_Id'First);
@@ -1690,6 +1772,7 @@ begin
    Season;
    Two_Up;
    Characters;
+   Flags;
    Spoken_Notes;
    Conditions;
    Lessons;

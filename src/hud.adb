@@ -758,6 +758,37 @@ package body Hud is
          end;
       end if;
 
+      --  Flags, the safety car, the pit lane: a band across the top
+      if F.VSC_Left > 0.0 or else F.Yellow_Ahead or else F.In_Pit_Lane then
+         declare
+            Line : constant String :=
+              (if F.VSC_Left > 0.0 then
+                 (if F.VSC_Left < 4.0 then "VIRTUAL SAFETY CAR ENDING"
+                  else "VIRTUAL SAFETY CAR: SLOW DOWN, NO OVERTAKING")
+               elsif F.In_Pit_Lane then "PIT LANE  60 km/h"
+               else "YELLOW FLAG AHEAD");
+            Sz : constant Float := 22.0 * S;
+            MW : constant Float := Float (Line'Length) * Sz * Mono_Ratio + 40.0 * S;
+            BY : constant Float := 84.0 * S;
+         begin
+            if F.In_Pit_Lane and then F.VSC_Left = 0.0 then
+               Color (0.1, 0.25, 0.7, 0.85);
+            else
+               Color (0.95, 0.75, 0.05, 0.9);
+            end if;
+            Rect (Cx - MW / 2.0, BY, MW, 40.0 * S);
+            Color (0.05, 0.05, 0.05);
+            if F.In_Pit_Lane and then F.VSC_Left = 0.0 then
+               Color (1.0, 1.0, 1.0);
+            end if;
+            Text (Line, Cx, BY + 28.0 * S, Sz, 0.5);
+         end;
+      end if;
+      if F.Penalty > 0.0 and then Session.Config.Mode = Session.Race then
+         Color (1.0, 0.35, 0.2);
+         Text ("PENALTY +" & Trim (Natural'Image (Natural (F.Penalty))) & " s", W - 30.0 * S, H * 0.36, 18.0 * S, 1.0);
+      end if;
+
       if F.Service_Left > 0.0 or else F.Service_Offer
         or else (F.Uses_Fuel and then F.Fuel <= 0.0)
       then

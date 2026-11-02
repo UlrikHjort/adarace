@@ -53,6 +53,7 @@ package Session is
       On_Grid    : Boolean := True;   --  still to cross the line the first time
       Progress   : Float := 0.0;      --  a stage: how far along it, no short cuts
       Resets     : Natural := 0;      --  a stage: times put back on the road
+      Penalty    : Float := 0.0;      --  seconds, added at the finish
    end record;
 
    type Ghost_Frame is record
@@ -71,6 +72,18 @@ package Session is
    Spec    : Vehicle.Spec := Vehicle.Spec_Of (Vehicle.Road_GT);
    Player_Spec : Vehicle.Spec := Vehicle.Spec_Of (Vehicle.Road_GT);
    --  With the driver's setup; the AI's cars run as Spec
+
+   In_Pit_Lane : Boolean := False;  --  the player's car, held to the limit
+
+   --  Incidents in a race: a yellow flag where a car has stopped, and the
+   --  virtual safety car when it stays stopped: everyone slows, no gaining
+   Yellow_S      : Float := -1.0;     --  where, along the circuit; -1 none
+   Yellow_Until  : Float := 0.0;      --  race time
+   VSC_Until     : Float := 0.0;
+   VSC_Penalty   : constant := 5.0;   --  seconds, for going too fast under it
+
+   function VSC_On return Boolean;
+   function VSC_Pace return Float;    --  of the line's speed, under it
 
    Service_Left : Float := 0.0;   --  in the pit box: seconds until done
    Service_Offer : Boolean := False;  --  in the box, with something to mend

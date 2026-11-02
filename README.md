@@ -228,6 +228,11 @@ Mode *Two players* splits the screen: player one above, on the wheel (or the arr
 player two below, on the arrow keys when there is a wheel or on W A S D when there is not,
 with the gears changing by themselves. AI cars can race the two as well.
 
+In races a car stopped on the circuit brings out a yellow flag, and if it stays stopped the
+virtual safety car: everyone slows to about 60 % of racing speed, and going faster than that
+for long costs five seconds at the finish. The pit lane runs along the left of the start and
+finish straight with a 60 km/h limiter, the pit box in the middle of it.
+
 ## Your own roads
 
 Roads are text files in `tracks/`, read at start in the order of their names, so a new circuit
