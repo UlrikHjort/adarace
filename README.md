@@ -26,7 +26,7 @@ school, night, weather and seasons.
 | A lesson passed, with the coach's word | The menu and car setup |
 
 All of it is the game itself with the AI driver at the wheel, made by
-`scripts/make_media.sh`.
+`scripts/make_media.sh`. `make demo` records a demo video with sound in the same way.
 
 ## Getting started
 
