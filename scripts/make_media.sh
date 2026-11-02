@@ -76,6 +76,15 @@ pick rain    && clip rain 14 5 ADARACE_TRACK=1 ADARACE_CAMERA=COCKPIT ADARACE_WE
 pick race    && clip race 8 6 ADARACE_MODE=1 ADARACE_TRACK=7 ADARACE_CAR=1 ADARACE_CAMERA=CHASE ADARACE_TIME=6
 pick school  && clip school 18 5 ADARACE_MODE=2 ADARACE_LESSON=1 ADARACE_CAMERA=CHASE
 
+# The motorcycle is car 5; a show rider (wheelies), the camera swung round to its side
+BIKE="ADARACE_CAR=5 ADARACE_STUNT=1"
+# shellcheck disable=SC2086
+pick bike-wheelie && clip bike-wheelie 6 5 $BIKE ADARACE_TRACK=1 ADARACE_CAMERA=CHASE ADARACE_ORBIT=75.0
+# shellcheck disable=SC2086
+pick bike-lean    && clip bike-lean 17 5 $BIKE ADARACE_TRACK=2 ADARACE_CAMERA=CHASE ADARACE_TIME=2
+# shellcheck disable=SC2086
+pick bike-helmet  && clip bike-helmet 18 5 $BIKE ADARACE_TRACK=7 ADARACE_CAMERA=COCKPIT ADARACE_TIME=6
+
 pick shots && {
     shot rally-forest 1500 $STAGE ADARACE_CAMERA=CHASE
     shot rally-night 1800 $STAGE ADARACE_CAMERA=CHASE ADARACE_TIME=6

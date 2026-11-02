@@ -22,8 +22,8 @@ motorcycle, a driving school, night, weather and seasons.
 | The driving school and its coloured line | Autumn at dawn |
 | ![The Hyper on Boulevard Royal at dusk](docs/screenshots/boulevard.jpg) | ![Two players, split screen](docs/screenshots/split-screen.jpg) |
 | The Hyper on Boulevard Royal, at dusk | Two players on one screen |
-| ![The motorcycle leaning into a corner](docs/screenshots/motorcycle.jpg) | ![The motorcycle from the helmet](docs/screenshots/motorcycle-helmet.jpg) |
-| The motorcycle, leaning into a corner | From the helmet, the horizon tilting with the bike |
+| ![A wheelie on the motorcycle](docs/gifs/bike-wheelie.gif) | ![The motorcycle from the helmet](docs/gifs/bike-helmet.gif) |
+| The motorcycle, up on the back wheel | From the helmet at night, the horizon tilting with the bike |
 | ![A GT3 in the golden hour](docs/screenshots/gt3-golden.jpg) | ![Fog on the stage](docs/screenshots/rally-fog.jpg) |
 | A GT3 in the golden hour | Fog on the stage |
 | ![A lesson passed](docs/screenshots/lesson-passed.jpg) | ![The menu and car setup](docs/screenshots/menu.jpg) |
@@ -123,6 +123,8 @@ From the cockpit, live gauges replace the speed panel. Bodywork crumples and scr
 damage, and collects mud, dust or road salt on loose ground, which rain washes off.
 
 ## The motorcycle
+
+![The motorcycle leaning through the bends of Monte Ferro](docs/gifs/bike-lean.gif)
 
 The Nordic 1000 R is a litre sports bike: 150 kW, 275 kg with its rider, on one track.
 It steers by leaning, as a real one does. The rider asks for a curve, and the bike rolls
