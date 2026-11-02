@@ -78,9 +78,10 @@ Physics run at 1 kHz in an Ada task of their own, independent of the frame rate.
   Sent at 125 Hz.
 
 Five cars: a road GT, a GT3 with slicks and wings, a four wheel drive rally car, a light
-classic and a mid-engined hypercar. Four circuits: Søndersø Ring (4.9 km), Monte Ferro
-(3.2 km, 64 m of climb), Kalvø Speedway (3.2 km, banked oval) and the Havnebyen street circuit
-(2.8 km, between walls along a harbour), and three rally stages.
+classic and a mid-engined hypercar. Five circuits: Søndersø Ring (4.9 km), Monte Ferro
+(3.2 km, 64 m of climb), Kalvø Speedway (3.2 km, banked oval), the Havnebyen street circuit
+(2.8 km, between walls along a harbour) and a street circuit in Paris on the real streets
+(3.8 km), and three rally stages.
 
 Hot laps against the ghost of your best lap, which is kept per car and circuit
 in `~/.local/share/adarace`, or races against up to seven AI cars on the same
@@ -208,6 +209,12 @@ or stage needs no code. `tracks/04-skovvej.track` is a good one to start from:
 A street circuit adds `setting city`: walls at the kerb with a catch fence, street lamps, a
 town of buildings and square corners. `water x z radius` digs a harbour basin there.
 
+Real streets: `scripts/osm_road.py` makes a street circuit from OpenStreetMap data. Give it the
+map and a few points to pass through, and it routes along drivable roads, rounds the corners,
+and brings the real buildings beside the route (as `block` lines, at their size and height)
+and the river (as `water`). `tracks/08-paris.track` was made so: up the Champs-Élysées from
+the Place de la Concorde, down the Avenue George V to Alma and back along the Seine.
+
 The points are in metres and join into a closed loop, so a stage has a road home after its
 finish. Banking is in degrees, positive when the right side is lower. Keep parts of the road
 40 m apart and corners over about 12 m radius. A bad file is left out with a message naming
@@ -240,4 +247,6 @@ Work happens on a branch per feature or fix. See [CONTRIBUTING.md](CONTRIBUTING.
 
 ## Licence
 
-MIT: see [LICENSE](LICENSE).
+MIT: see [LICENSE](LICENSE). The Paris road file, `tracks/08-paris.track`, is made from
+OpenStreetMap data: map data © OpenStreetMap contributors, available under the
+[Open Database Licence](https://www.openstreetmap.org/copyright).

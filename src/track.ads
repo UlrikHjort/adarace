@@ -62,9 +62,20 @@ package Track is
    function Is_City return Boolean;
    --  A street circuit: walls at the kerb, buildings behind them, maybe water
 
-   --  Water (a harbour basin), if the road has one
+   --  Water (a harbour basin, a river), as round pieces, if the road has any
    Has_Water : Boolean := False;
-   Water_X, Water_Z, Water_R, Water_Y : Float := 0.0;
+   Water_Y : Float := 0.0;
+   Max_Water : constant := 256;
+   type Pool is record
+      X, Z, R : Float := 0.0;
+   end record;
+   type Pool_Array is array (1 .. Max_Water) of Pool;
+   Pools : Pool_Array;
+   Pool_Count : Natural := 0;
+   --  (the first, for those that want one)
+   function Water_X return Float;
+   function Water_Z return Float;
+   function Water_R return Float;
 
    --  The buildings of a street circuit, each a block standing along the road
    type Building is record

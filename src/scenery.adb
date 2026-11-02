@@ -955,12 +955,12 @@ package body Scenery is
          end;
       end loop;
 
-      --  The harbour basin
-      if Track.Has_Water then
+      --  Water: a harbour basin, a river, each round piece a square on it
+      for K in 1 .. Track.Pool_Count loop
          declare
-            R : constant Float := Track.Water_R + 30.0;
-            X : constant Float := Track.Water_X;
-            Z : constant Float := Track.Water_Z;
+            R : constant Float := Track.Pools (K).R + 20.0;
+            X : constant Float := Track.Pools (K).X;
+            Z : constant Float := Track.Pools (K).Z;
             Y : constant Float := Track.Water_Y;
             N : constant Vec3 := (0.0, 1.0, 0.0);
          begin
@@ -971,7 +971,7 @@ package body Scenery is
             Add (O, ((X + R, Y, Z + R), N, 0.0, 0.0, 0.0, Water, 0.0, 0.0));
             Add (O, ((X + R, Y, Z - R), N, 0.0, 0.0, 0.0, Water, 0.0, 0.0));
          end;
-      end if;
+      end loop;
    end Build_City;
 
    procedure Build_Trees is
