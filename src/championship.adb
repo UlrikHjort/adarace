@@ -39,6 +39,16 @@ package body Championship is
       Active := True;
    end Begin_Season;
 
+   procedure Begin_Season (Cars : Positive; Only : Road_Array) is
+   begin
+      Begin_Season (Cars);
+      Road_Count := 0;
+      for T of Only loop
+         Road_Count := Road_Count + 1;
+         Roads (Road_Count) := T;
+      end loop;
+   end Begin_Season;
+
    function Current_Road return Track.Track_Id is (Roads (At_Round));
    function Round_Number return Positive is (At_Round);
    function Round_Total return Natural is (Road_Count);

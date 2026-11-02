@@ -13,6 +13,7 @@ with Ada.Numerics.Elementary_Functions;
 with Ada.Strings.Fixed;
 with Ada.Text_IO;
 
+with Career;
 with Championship;
 with Codriver;
 with Net;
@@ -423,6 +424,49 @@ procedure Simtest is
              "and nobody runs dry");
       Check (not VSC_Seen, "a car in its pit box brings out no safety car");
    end Endurance;
+
+   ---------------------------------------------------------------------------
+   --  A career: series after series, the top three opens the next
+
+   procedure Careers is
+      Opened : Boolean;
+   begin
+      Career.Forget;
+      Check (Career.Reached = 1, "a career starts in the first series");
+      for T in Career.Tier loop
+         declare
+            R : constant Career.Road_List := Career.Roads (T);
+            Good : Boolean := True;
+         begin
+            for K in R'Range loop
+               Good := Good and then not Track.Stage_Road (R (K))
+                 and then (K = R'First or else R (K) /= R (K - 1));
+            end loop;
+            Check (Good, Career.Series (T) & ": three circuits, on the " & Name (Career.Kind (T)));
+         end;
+      end loop;
+      Check (Track.Name (Career.Roads (1) (3)) = "Havnebyen (street circuit)"
+             and then Track.Name (Career.Roads (5) (1)) = "Storoe TT",
+             "the series find their circuits by name");
+      Career.Season_Over (1, 4, Opened);
+      Check (not Opened and then Career.Reached = 1, "fourth overall opens nothing");
+      Career.Season_Over (1, 2, Opened);
+      Check (Opened and then Career.Reached = 2, "second overall opens the next series");
+      Career.Season_Over (1, 1, Opened);
+      Check (not Opened and then Career.Reached = 2, "running an old series again opens nothing more");
+      Career.Forget;
+      Career.Load;
+      Check (Career.Reached = 2 and then Career.Best_Place (1) = 1
+             and then Career.Best_Place (2) = 0,
+             "the career is kept between sittings");
+      Check (Career.Skill (6) > Career.Skill (1), "the rivals get quicker on the way up");
+      Championship.Begin_Season (4, Championship.Road_Array (Career.Roads (2)));
+      Check (Championship.Round_Total = 3 and then Championship.Current_Road = Career.Roads (2) (1),
+             "a series is a championship at its own circuits");
+      Championship.Active := False;
+      Career.Forget;
+      Career.Save;
+   end Careers;
 
    ---------------------------------------------------------------------------
 
@@ -2040,6 +2084,7 @@ begin
    Two_Up;
    Characters;
    Endurance;
+   Careers;
    Flags;
    Wire;
    Spoken_Notes;

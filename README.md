@@ -120,6 +120,21 @@ Hot laps against the ghost of your best lap, which is kept per car and circuit
 in `~/.local/share/adarace`, or races against up to seven AI cars on the same
 physics. A lap with all four wheels off the track does not count.
 
+**Career:** a ladder of six short championships, three races of five laps each. Each series
+has its own vehicle and circuits:
+
+| | Series | Vehicle | Circuits |
+|---|---|---|---|
+| 1 | Classic Cup | Nordic 1600 | Søndersø Ring, Monte Ferro, Havnebyen |
+| 2 | Road GT Series | Nordic GT 420 | Fjordringen, Boulevard Royal, Kalvø Speedway |
+| 3 | Superbike Trophy | Nordic 1000 R | Søndersø Ring, Fjordringen, Havnebyen |
+| 4 | GT3 Championship | Nordic GT3 | Monte Ferro, Boulevard Royal, Søndersø Ring |
+| 5 | Island TT Masters | Nordic 1000 R | Storø TT, Monte Ferro, Fjordringen |
+| 6 | Hypercar Finale | Nordic Hyper | Kalvø Speedway, Fjordringen, Boulevard Royal |
+
+Finish a series in the top three to open the next one. The rivals get a little quicker on
+the way up. Your progress is kept in `~/.local/share/adarace/career`.
+
 **Endurance:** choose *45 min endurance* as the race length. It is a race against the clock,
 from the golden hour through dusk into the night, on the headlamps by the end. When the time
 is up, the leader takes the flag at the line and everyone finishes their lap. Fuel and tyre

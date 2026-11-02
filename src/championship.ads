@@ -29,6 +29,12 @@ package Championship is
    Finished_Round : Boolean := False;
 
    procedure Begin_Season (Cars : Positive);
+   --  A round at every circuit
+
+   type Road_Array is array (Positive range <>) of Track.Track_Id;
+
+   procedure Begin_Season (Cars : Positive; Only : Road_Array);
+   --  A round at each of these (a career's series)
    function Current_Road return Track.Track_Id;
    function Round_Number return Positive;
    function Round_Total return Natural;

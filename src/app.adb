@@ -45,6 +45,7 @@ with GL;
 with GL_Area;
 with Hud;
 with Hud_Layer;
+with Career;
 with Championship;
 with Rally;
 with Net;
@@ -145,6 +146,15 @@ package body App is
       Message := To_Unbounded_String (S);
       Message_Until := Sim_Loop.Now + Seconds;
    end Say;
+
+   function Ordinal (N : Positive) return String is
+      Img : constant String := N'Image;
+      Num : constant String := Img (Img'First + 1 .. Img'Last);
+   begin
+      return Num & (if N mod 100 in 11 .. 13 then "th"
+                    else (case N mod 10 is when 1 => "st", when 2 => "nd", when 3 => "rd",
+                                            when others => "th"));
+   end Ordinal;
 
    --  "This felt wrong": numbered in the telemetry, for telling about it later
    procedure Mark_Moment is
@@ -333,7 +343,9 @@ package body App is
 
    function In_Rally return Boolean is (Combo_Mode.Get_Active = 3);
 
-   function In_Season return Boolean is (Combo_Mode.Get_Active = 4);
+   function In_Career return Boolean is (Combo_Mode.Get_Active = 8);
+
+   function In_Season return Boolean is (Combo_Mode.Get_Active = 4 or else In_Career);
 
    function Two_Players return Boolean is (Combo_Mode.Get_Active = 5);
 
@@ -388,7 +400,14 @@ package body App is
       elsif not In_Rally then
          Rally.Active := False;
       end if;
-      if In_Season and then In_Menu then
+      if In_Career and then In_Menu then
+         Career.Load;
+         Championship.Begin_Season
+           (Natural (Combo_Opp.Get_Active) + 2,
+            Championship.Road_Array (Career.Roads (Career.Reached)));
+         Say ("Career: " & Career.Series (Career.Reached) & ", round 1 of"
+              & Career.Round_Count'Image & ", on the " & Vehicle.Name (Career.Kind (Career.Reached)), 5.0);
+      elsif In_Season and then In_Menu then
          Championship.Begin_Season (Natural (Combo_Opp.Get_Active) + 2);
       elsif not In_Season then
          Championship.Active := False;
@@ -445,6 +464,17 @@ package body App is
       S.Assist.Damage := (case Integer (Combo_Damage.Get_Active) is
                              when 0 => 0.0, when 1 => 0.5, when others => 1.0);
       S.Tune := Chosen_Setup;
+      if In_Career then
+         S.Kind := Career.Kind (Career.Reached);
+         S.Laps := Career.Race_Laps;
+         S.Minutes := 0;
+         S.Tune := (others => <>);
+         if S.Assist.Mode in Vehicle.H_Auto_Clutch | Vehicle.H_Clutch
+           and then (Vehicle.Is_Bike (S.Kind) or else not Sim_Loop.Wheel_Present)
+         then
+            S.Assist.Mode := Vehicle.Paddles;
+         end if;
+      end if;
       S.Weather := Session.Weather_Kind'Val (Integer (Combo_Weather.Get_Active));
       S.Season := Session.Season_Kind'Val (Integer (Combo_Season.Get_Active));
       S.AI_Skill := (case Integer (Combo_Skill.Get_Active) is
@@ -1219,6 +1249,26 @@ package body App is
             Sim_Loop.Latest (Prev, Cur);
             if Cur.Race_Over then
                Championship.Finish_Round;
+               if In_Career and then Championship.Is_Last then
+                  declare
+                     T : constant Career.Tier := Career.Reached;
+                     Table : constant Championship.Table := Championship.Standings;
+                     Place : Positive := Table'Last;
+                     Opened : Boolean;
+                  begin
+                     for K in Table'Range loop
+                        if Table (K).Car = 1 then
+                           Place := K - Table'First + 1;
+                        end if;
+                     end loop;
+                     Career.Season_Over (T, Place, Opened);
+                     Say (Career.Series (T) & ": " & Ordinal (Place) & " overall.  "
+                          & (if Opened then "Next: the " & Career.Series (Career.Reached) & " is open!"
+                             elsif Place <= 3 then "The whole career is won!"
+                             else "A place in the top three opens the next series."),
+                          10.0);
+                  end;
+               end if;
             end if;
          end;
       end if;
@@ -1376,7 +1426,7 @@ package body App is
       Combo_Car.Set_Active (0);
       Add_Row ("Car", Combo_Car);
 
-      Make (Combo_Mode, "Mode", "Hot laps, against your ghost|Race against the AI|Driving school|Rally: every stage in turn|Championship: a race at every circuit|Two players: split screen|Online: host a race|Online: join a race");
+      Make (Combo_Mode, "Mode", "Hot laps, against your ghost|Race against the AI|Driving school|Rally: every stage in turn|Championship: a race at every circuit|Two players: split screen|Online: host a race|Online: join a race|Career: from the Classic Cup to the Hypercars");
       Gtk_New (Combo_Lesson);
       for L in School.Lesson_Id loop
          Combo_Lesson.Append_Text (School.Title (L));
