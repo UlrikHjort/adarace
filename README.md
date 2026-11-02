@@ -43,6 +43,32 @@ and how to install it. On Debian, Ubuntu and Mint:
 The game needs a graphics card with OpenGL 4.5. A Logitech G29 is found by itself, and the
 keyboard always works. `ffmpeg` is optional, for F9 recordings and the co-driver's voice.
 
+## The co-driver's voice
+
+The co-driver speaks with clips made on your own machine the first time you run `make run`
+(by `scripts/make_voice.sh`, which needs `ffmpeg`). Without a speech program it stays silent
+and the arrows on the screen do the job. Two programs can make the voice:
+
+- **espeak-ng**, the quick way: a clear but robotic voice.
+
+      sudo apt install espeak-ng ffmpeg
+
+- **Piper**, a natural voice: a neural speech program that runs on your own machine. Install
+  it, for example with `pipx install piper-tts` (or `pip install --user piper-tts`), so that
+  the `piper` command is found. Then download a voice: both its `.onnx` and `.onnx.json` files,
+  for instance `en_US-lessac-medium` from the
+  [Piper voices](https://huggingface.co/rhasspy/piper-voices/tree/main/en/en_US/lessac/medium),
+  into `~/.local/share/piper/`. Each voice has its own licence: see its model card.
+
+The script uses Piper when it finds both `piper` and an English voice under your home folder,
+and espeak-ng otherwise. The clips are made once; after installing Piper, make them again:
+
+    FORCE=1 scripts/make_voice.sh
+
+Elsewhere: `PIPER=/path/to/piper PIPER_VOICE=/path/to/voice.onnx FORCE=1 scripts/make_voice.sh`.
+Your own voice works too: record each word to `sounds/codriver/<word>.pcm` (44.1 kHz, 16 bit,
+mono, raw); the words are in the script.
+
 ## How this was made
 
 AdaRace is an experiment in how far AI-led development can go on a real-time program in
@@ -177,8 +203,8 @@ about 5 km of gravel road through a forest, timed from the lights to the finish 
   1 (hairpin) to 6 (nearly flat), LONG, and crests. Next corner on the left.
 - **Spoken calls:** the same notes read out over the intercom ("right four long, over
   crest"), early enough to act on. `make run` makes the voice on your machine with Piper or
-  espeak-ng (`scripts/make_voice.sh`); the clips are not in git, because a voice has its own
-  licence. B turns it off.
+  espeak-ng: see [The co-driver's voice](#the-co-drivers-voice). The clips are not in git,
+  because a voice has its own licence. B turns it off.
 - **Trees are solid** and hurt the car. R puts you back on the road at +15 s and repairs
   nothing. Short cuts don't count: the stage only finishes along the road.
 
