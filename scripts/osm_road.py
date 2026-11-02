@@ -9,7 +9,7 @@
 # writes is made from OpenStreetMap data, so it is under the ODbL, and says so.
 #
 #   scripts/osm_road.py --osm paris.osm --name "Paris" \
-#       --via 48.8656,2.3212 48.8738,2.2950 ... --out tracks/08-paris.track
+#       --via 48.8656,2.3212 48.8738,2.2950 ... --out tracks/08-boulevard.track
 
 import argparse, heapq, math, sys
 import xml.etree.ElementTree as ET

@@ -1,4 +1,4 @@
---  Dérive: open-world Paris in Ada
+--  AdaRace: a driving simulator in Ada
 --  Copyright (c) 2026 Ulrik Hørlyk Hjort
 --  SPDX-License-Identifier: MIT
 --
