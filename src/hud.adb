@@ -375,10 +375,25 @@ package body Hud is
             else
                Text ("LAP", X + 14.0 * S, Y, 18.0 * S);
                Color (1.0, 1.0, 1.0);
-               Text (Trim (Natural'Image
-                       (if Racing then Natural'Min (L.Lap + 1, Session.Config.Laps) else L.Lap + 1))
-                     & (if Racing then " /" & Session.Config.Laps'Image else ""),
-                     X + 70.0 * S, Y, 18.0 * S);
+               if Racing and then Session.Config.Minutes > 0 then
+                  --  Against the clock: the time left, then the last lap
+                  declare
+                     Left : constant Natural := Natural (Float'Ceiling (Session.Time_Left));
+                  begin
+                     Text (Trim (Natural'Image (L.Lap + 1)) & "   "
+                           & (if Left > 0
+                              then Trim (Natural'Image (Left / 60)) & ":"
+                                   & (if Left mod 60 < 10 then "0" else "")
+                                   & Trim (Natural'Image (Left mod 60)) & " left"
+                              else "last lap"),
+                           X + 70.0 * S, Y, 18.0 * S);
+                  end;
+               else
+                  Text (Trim (Natural'Image
+                          (if Racing then Natural'Min (L.Lap + 1, Session.Config.Laps) else L.Lap + 1))
+                        & (if Racing then " /" & Session.Config.Laps'Image else ""),
+                        X + 70.0 * S, Y, 18.0 * S);
+               end if;
             end if;
             if L.Invalid then
                Color (1.0, 0.25, 0.15);

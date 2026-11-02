@@ -423,7 +423,12 @@ package body App is
       S.Kind := Chosen_Car;
       S.Opponents := Natural (Combo_Opp.Get_Active) + 1;
       S.Laps := (case Integer (Combo_Laps.Get_Active) is
-                    when 0 => 3, when 1 => 5, when 2 => 10, when others => 20);
+                    when 0 => 3, when 1 => 5, when 2 => 10, when 3 => 20, when others => 999);
+      --  Endurance: against the clock, from the golden hour into the night
+      S.Minutes := (if Combo_Laps.Get_Active = 4 then 45 else 0);
+      if Env ("ADARACE_MINUTES") /= "" then
+         S.Minutes := Natural'Value (Env ("ADARACE_MINUTES"));
+      end if;
       S.Assist.Mode := Vehicle.Gearbox_Mode'Val (Integer (Combo_Gear.Get_Active));
       --  An H-shifter needs the wheel's lever, and a motorcycle's box is
       --  sequential: otherwise it would sit in neutral
@@ -1007,6 +1012,28 @@ package body App is
             elsif Now_T < Message_Until then To_String (Message) else "");
       begin
          Opt.Dt := Dt;
+         Opt.Fade := 0.0;
+         if not In_Menu and then Session.Config.Mode = Session.Race
+           and then Session.Config.Minutes > 0
+         then
+            --  Endurance: the golden hour, dusk at a third, night by two thirds
+            declare
+               Whole : constant Float := Float (Session.Config.Minutes) * 60.0;
+               P : constant Float := Float'Min (1.0, (Whole - Session.Time_Left) / Whole);
+            begin
+               if P < 0.33 then
+                  Opt.Day := Renderer.Golden_Hour;
+                  Opt.Day_Next := Renderer.Dusk;
+                  Opt.Fade := P / 0.33;
+               elsif P < 0.66 then
+                  Opt.Day := Renderer.Dusk;
+                  Opt.Day_Next := Renderer.Night;
+                  Opt.Fade := (P - 0.33) / 0.33;
+               else
+                  Opt.Day := Renderer.Night;
+               end if;
+            end;
+         end if;
          if In_Menu then
             Opt.Camera := Renderer.Trackside;
             Opt.Mirror := False;
@@ -1359,7 +1386,7 @@ package body App is
       Make (Combo_Aid, "Driving aids", "None|Coloured driving line|Line and coach's tips");
       Make (Combo_Opp, "Opponents", "1|2|3|4|5|6|7");
       Combo_Opp.Set_Active (4);
-      Make (Combo_Laps, "Race laps", "3|5|10|20");
+      Make (Combo_Laps, "Race laps", "3|5|10|20|45 min endurance");
       Make (Combo_Skill, "AI strength", "Easy|Medium|Hard|Alien");
       Combo_Skill.Set_Active (2);
       Make (Combo_Gear, "Gearbox",

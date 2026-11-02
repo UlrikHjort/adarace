@@ -460,6 +460,17 @@ package body Renderer is
            (Normalize ((0.35, 0.65, 0.40)), (0.085, 0.10, 0.15), (0.006, 0.009, 0.020), (0.012, 0.016, 0.030),
             0.00015, 0.35, 1.6, 0.0));
 
+   --  The light on its way from one hour to the next
+   function Blend (A, B : Sky_Look; T : Float) return Sky_Look is
+      function Mix (X, Y : Float) return Float is (X + (Y - X) * T);
+      function Mix (X, Y : Vec3) return Vec3 is ((Mix (X.X, Y.X), Mix (X.Y, Y.Y), Mix (X.Z, Y.Z)));
+   begin
+      return (Sun_Dir => Normalize (Mix (A.Sun_Dir, B.Sun_Dir)), Sun_C => Mix (A.Sun_C, B.Sun_C),
+              Sky_C => Mix (A.Sky_C, B.Sky_C), Hor => Mix (A.Hor, B.Hor), Fog => Mix (A.Fog, B.Fog),
+              Clouds => Mix (A.Clouds, B.Clouds), Exposure => Mix (A.Exposure, B.Exposure),
+              Mist => Mix (A.Mist, B.Mist));
+   end Blend;
+
    --  The weather over it; darkness stays darkness
    function Look_For (D : Time_Of_Day) return Sky_Look is
       S : Sky_Look := Clear_Look (D);
@@ -1009,9 +1020,11 @@ package body Renderer is
         (if Span > 0.0 then Clamp (Float ((Now_T - A.Time) / Span), 0.0, 8.0) else 1.0);
       Poses : Sim_Loop.Pose_Array := B.Poses;
       Dt : constant Float := Options.Dt;
-      Sky : constant Sky_Look := Look_For (Options.Day);
+      Sky : constant Sky_Look :=
+        (if Options.Fade > 0.0 then Blend (Look_For (Options.Day), Look_For (Options.Day_Next), Options.Fade)
+         else Look_For (Options.Day));
       Dim : constant Boolean :=
-        Options.Day in Dawn | Dusk | Night
+        (if Options.Fade > 0.5 then Options.Day_Next else Options.Day) in Dawn | Dusk | Night
         or else Session.Config.Weather in Session.Rain | Session.Fog | Session.Snowing;
       Fov : constant Float := Options.Fov * Pi / 180.0;
       Aspect : constant Float := Float (Width) / Float (Natural'Max (Height, 1));

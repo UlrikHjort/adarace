@@ -385,6 +385,46 @@ procedure Simtest is
    end Motorcycle;
 
    ---------------------------------------------------------------------------
+   --  An endurance race, against the clock: everyone stops for fuel
+
+   procedure Endurance is
+      R : Session.Settings := Hotlap (Road_GT);
+      N : Vehicle.Inputs;
+      VSC_Seen : Boolean := False;
+      Ran : Float := 0.0;
+   begin
+      Track.Load (1);
+      R.Mode := Session.Race;
+      R.Opponents := 3;
+      R.Minutes := 6;
+      R.AI_Skill := 0.95;
+      Session.Force_AI := True;
+      Session.Start (R);
+      for I in 1 .. 1_200_000 loop
+         Session.Step (N);
+         Ran := Float (I) / 1000.0;
+         VSC_Seen := VSC_Seen or else Session.VSC_On;
+         exit when (for all K in 1 .. Session.Car_Count => Session.Laps (K).Finished);
+      end loop;
+      Session.Force_AI := False;
+      for K in 1 .. Session.Car_Count loop
+         Put_Line ("    car" & K'Image & ": laps" & Session.Laps (K).Lap'Image & ", stops"
+                   & Session.Pit_Stops (K)'Image & ", finished at" & Img (Session.Laps (K).Finish_Time, 0)
+                   & " s, fuel" & Img (Session.Cars (K).Fuel) & " kg");
+      end loop;
+      Check ((for all K in 1 .. Session.Car_Count => Session.Laps (K).Finished),
+             "an endurance race ends for everyone (ran" & Img (Ran, 0) & " s)");
+      Check ((for all K in 1 .. Session.Car_Count =>
+                Session.Laps (K).Finish_Time >= 360.0 and then Session.Laps (K).Finish_Time < 360.0 + 200.0),
+             "the flag comes after the six minutes, a lap at most later");
+      Check ((for some K in 2 .. Session.Car_Count => Session.Pit_Stops (K) >= 1),
+             "the AI stops for fuel when it will not last");
+      Check ((for all K in 1 .. Session.Car_Count => Session.Cars (K).Fuel > 0.0),
+             "and nobody runs dry");
+      Check (not VSC_Seen, "a car in its pit box brings out no safety car");
+   end Endurance;
+
+   ---------------------------------------------------------------------------
 
    function Saved_By_Demo return Boolean is
      (Ada.Directories.Exists (Session.Save_Name));
@@ -1937,6 +1977,11 @@ begin
       Ada.Directories.Delete_Tree (Ada.Environment_Variables.Value ("HOME"));
    end if;
    --  ADARACE_ONLY=bike: just the motorcycle, while tuning it
+   if Ada.Environment_Variables.Value ("ADARACE_ONLY", "") = "endurance" then
+      Endurance;
+      Put_Line (if Failed = 0 then "All passed" else Failed'Image & " FAILED");
+      return;
+   end if;
    if Ada.Environment_Variables.Value ("ADARACE_ONLY", "") = "bike" then
       Straight (Sport_Bike);
       Motorcycle;
@@ -1994,6 +2039,7 @@ begin
    Season;
    Two_Up;
    Characters;
+   Endurance;
    Flags;
    Wire;
    Spoken_Notes;

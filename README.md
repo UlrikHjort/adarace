@@ -120,6 +120,13 @@ Hot laps against the ghost of your best lap, which is kept per car and circuit
 in `~/.local/share/adarace`, or races against up to seven AI cars on the same
 physics. A lap with all four wheels off the track does not count.
 
+**Endurance:** choose *45 min endurance* as the race length. It is a race against the clock,
+from the golden hour through dusk into the night, on the headlamps by the end. When the time
+is up, the leader takes the flag at the line and everyone finishes their lap. Fuel and tyre
+wear always count, and every car starts with fuel for about half the race. So everyone stops
+at least once: you in the pit box past the line, and the AI cars too, which take the pit lane
+under its 60 km/h limit, stop at their boxes and rejoin. The HUD shows the time left.
+
 The cars have their own shapes: the GT3 low with flared arches, the R4 a tall hatchback.
 From the cockpit, live gauges replace the speed panel. Bodywork crumples and scratches with
 damage, and collects mud, dust or road salt on loose ground, which rain washes off.

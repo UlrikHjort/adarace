@@ -25,6 +25,7 @@ package Session is
       Assist   : Vehicle.Assists;
       Opponents : Natural range 0 .. Max_Cars - 1 := 5;
       Laps     : Positive := 5;
+      Minutes  : Natural := 0;   --  a race against the clock (endurance), not laps; 0: laps
       AI_Skill : Float := 0.95;
       Tune     : Vehicle.Setup;
       Weather  : Weather_Kind := Clear;
@@ -111,6 +112,12 @@ package Session is
    Reset_Penalty : constant := 15.0;   --  seconds, on a rally stage
 
    procedure Reset_Player;
+
+   function Time_Left return Float;
+   --  An endurance race: seconds until the flag (0 when it is out, or no clock)
+
+   function Pit_Stops (I : Car_Index) return Natural;
+   --  Stops made in this race
 
    procedure Seed_Dice (Seed : Integer);
    --  The AI's chances the same every time (for the tests)
