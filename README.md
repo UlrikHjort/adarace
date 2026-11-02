@@ -217,6 +217,10 @@ Mode *Rally* runs every stage in turn: Skovvej, Granbakken (tight, with hairpins
 (wide and fast). Your times add up against five crews whose pace follows the AI strength, and
 damage goes with you, half of it mended at each service.
 
+The rivals each drive their own way, all season: Holm is quick and clean, Virta brave and
+error-prone, Moreau hard to pass, Silva steady but tiring late in a race, Nagy wild. They brake
+later or earlier, follow closer, cover the inside, and now and then overcook a corner.
+
 Mode *Championship* races at every circuit in turn, with points for the first eight places
 (25, 18, 15, 12, 10, 8, 6, 4) and the same named rivals all season.
 

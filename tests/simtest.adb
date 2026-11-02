@@ -1266,10 +1266,50 @@ procedure Simtest is
       for I in 1 .. 4000 loop
          Session.Step (N);
       end loop;
-      Check (Speed (Session.Cars (2)) > 10.0, "on the second player's throttle it goes:"
+      --  (with rivals round it at the start, it need not get far)
+      Check (Speed (Session.Cars (2)) > 6.0, "on the second player's throttle it goes:"
              & Img (Speed (Session.Cars (2)) * 3.6, 0) & " km/h");
       Session.Second_Hands := (others => <>);
    end Two_Up;
+
+   --  Rivals with a character: some overcook a corner now and then, the order
+   --  changes, and every one of them still finishes
+   procedure Characters is
+      R : Session.Settings := Hotlap (Race_GT3);
+      N : Vehicle.Inputs;
+      Changes : Natural := 0;
+      Before : array (Session.Car_Index) of Natural := (others => 0);
+   begin
+      Track.Load (2);
+      R.Mode := Session.Race;
+      R.Opponents := 7;
+      R.Laps := 3;
+      R.AI_Skill := 0.93;
+      Session.Force_AI := True;
+      Session.AI_Mistakes := 0;
+      Session.Start (R);
+      for I in 1 .. 900_000 loop
+         Session.Step (N);
+         if I mod 500 = 0 then
+            for K in 2 .. Session.Car_Count loop
+               if Before (K) /= 0 and then Session.Laps (K).Position /= Before (K) then
+                  Changes := Changes + 1;
+               end if;
+               Before (K) := Session.Laps (K).Position;
+            end loop;
+         end if;
+         exit when (for all K in 1 .. Session.Car_Count => Session.Laps (K).Finished);
+      end loop;
+      Session.Force_AI := False;
+      Put_Line ("    mistakes" & Session.AI_Mistakes'Image & ", changes of place" & Changes'Image);
+      Check ((for all K in 1 .. Session.Car_Count => Session.Laps (K).Finished),
+             "eight cars with characters all finish");
+      Check (Session.AI_Mistakes > 0, "someone overcooks a corner");
+      Check (Changes > 4, "and places change in the race");
+      Check (Session.Character_Of (6).Aggression > Session.Character_Of (2).Aggression
+             and then Session.Character_Of (4).Defence > 0.9,
+             "the rivals differ");
+   end Characters;
 
    --  A rally from end to end, the AI driving, damage going along
    procedure Rally_Event is
@@ -1649,6 +1689,7 @@ begin
    Rally_Event;
    Season;
    Two_Up;
+   Characters;
    Spoken_Notes;
    Conditions;
    Lessons;

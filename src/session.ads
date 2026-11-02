@@ -107,6 +107,19 @@ package Session is
 
    function AI_Drives (I : Car_Index) return Boolean;
 
+   --  Each rival drives in a way of their own, the same all season
+   type Character is record
+      Pace       : Float;   --  added to the chosen strength
+      Aggression : Float;   --  0 .. 1: brakes later, follows closer, pushes past
+      Defence    : Float;   --  0 .. 1: covers the inside from a car behind
+      Mistakes   : Float;   --  a corner overcooked, per kilometre
+      Fatigue    : Float;   --  pace lost each lap, a fraction
+   end record;
+
+   function Character_Of (I : Car_Index) return Character;
+
+   AI_Mistakes : Natural := 0;   --  (counted, for the tests)
+
    function Save_Name return String;
    --  The file holding the best lap of this car at this circuit
 

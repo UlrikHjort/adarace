@@ -15,11 +15,14 @@ package body Session is
    use Ada.Numerics.Elementary_Functions;
    use Vehicle;
    use type Track.Surface_Kind;
+   use type Track.Note_Kind;
 
    Pi : constant := 3.14159_26535;
 
    type AI_State is record
       Skill     : Float := 0.95;
+      Rush_Until : Float := -1.0;   --  a mistake under way: on until this S
+      Last_Roll  : Float := 0.0;    --  where the dice were last thrown
       Offset    : Float := 0.0;   --  lateral, avoiding others
       Stuck_T   : Float := 0.0;
       Inputs    : Vehicle.Inputs;
@@ -42,6 +45,17 @@ package body Session is
      (Float'Max (Lo, Float'Min (Hi, V))) with Inline;
 
    Parked : Float := 0.0;
+
+   function Character_Of (I : Car_Index) return Character is
+     (case I is
+         when 2 => (Pace => 0.012, Aggression => 0.3, Defence => 0.5, Mistakes => 0.05, Fatigue => 0.002),
+         when 3 => (Pace => 0.006, Aggression => 0.9, Defence => 0.3, Mistakes => 0.30, Fatigue => 0.003),
+         when 4 => (Pace => 0.000, Aggression => 0.4, Defence => 0.95, Mistakes => 0.10, Fatigue => 0.002),
+         when 5 => (Pace => 0.004, Aggression => 0.2, Defence => 0.4, Mistakes => 0.04, Fatigue => 0.008),
+         when 6 => (Pace => -0.004, Aggression => 1.0, Defence => 0.6, Mistakes => 0.45, Fatigue => 0.004),
+         when 7 => (Pace => -0.008, Aggression => 0.5, Defence => 0.5, Mistakes => 0.12, Fatigue => 0.003),
+         when 8 => (Pace => -0.012, Aggression => 0.6, Defence => 0.7, Mistakes => 0.15, Fatigue => 0.005),
+         when others => (Pace => 0.0, Aggression => 0.0, Defence => 0.0, Mistakes => 0.0, Fatigue => 0.0));
 
    function AI_Drives (I : Car_Index) return Boolean is
      ((I > 1 and then not (Config.Two_Players and then I = 2))
@@ -146,6 +160,7 @@ package body Session is
    procedure Drive_AI (I : Car_Index) is
       C : Car renames Cars (I);
       St : AI_State renames AI (I);
+      Ch : constant Character := Character_Of (I);
       V : constant Float := C.Vx;
       Idx : Natural;
       T, D : Float;
@@ -188,6 +203,31 @@ package body Session is
                end;
             end if;
          end loop;
+         --  Defend: a car close behind, a corner coming, cover the inside
+         if Want = 0.0 and then Ch.Defence > 0.0 then
+            for K in 1 .. Car_Count loop
+               if K /= I then
+                  declare
+                     DS0 : constant Float := Track.Samples (Cars (K).Hint).S - Self_S;
+                     DS : constant Float :=
+                       (if DS0 > Track.Length / 2.0 then DS0 - Track.Length
+                        elsif DS0 < -Track.Length / 2.0 then DS0 + Track.Length else DS0);
+                     Bend : constant Float :=
+                       Track.Samples (Track.Next (Idx, Integer (40.0 / Track.Spacing))).Kappa;
+                  begin
+                     if DS < -2.0 and then DS > -18.0 and then Speed (Cars (K)) > Sp - 1.0
+                       and then abs Bend > 1.0 / 250.0
+                     then
+                        Want := (if Bend > 0.0 then 1.0 else -1.0) * 2.4 * Ch.Defence
+                          - (Track.Samples (Idx).Line_D
+                             - (if Bend > 0.0 then Track.Samples (Idx).W_R - 1.6
+                                else -(Track.Samples (Idx).W_L - 1.6)))
+                          * 0.0;
+                     end if;
+                  end;
+               end if;
+            end loop;
+         end if;
          St.Offset := St.Offset + Clamp (Want - St.Offset, -0.03, 0.03);
       end;
 
@@ -237,17 +277,26 @@ package body Session is
                     Float (Cars (K).X - C.X) * Track.Samples (Idx).RX
                     + Float (Cars (K).Z - C.Z) * Track.Samples (Idx).RZ;
                begin
-                  if DS > 0.0 and then DS < 25.0 and then abs Lat < 1.9 then
+                  if DS > 0.0 and then DS < 25.0 and then abs Lat < 1.9 - 0.4 * Ch.Aggression then
                      Slow_Ahead := Float'Min
-                       (Slow_Ahead, Speed (Cars (K)) + Float'Max (0.0, DS - 6.0) * 0.8);
+                       (Slow_Ahead,
+                        Speed (Cars (K)) + Float'Max (0.0, DS - 6.0 + 2.5 * Ch.Aggression) * 0.8);
                   end if;
                end;
             end if;
          end loop;
          declare
             Look : constant Natural := Track.Next (Idx, 1 + Integer (Sp * 0.14));
+            Here_S : constant Float := Track.Samples (Idx).S;
+            Tired : constant Float := 1.0 - Ch.Fatigue * Float (Laps (I).Lap);
+            Rushing : constant Boolean :=
+              St.Rush_Until >= 0.0 and then Here_S < St.Rush_Until
+              and then Here_S > St.Rush_Until - 200.0;
             Target : constant Float := Float'Min
-              (Track.Samples (Look).Line_V * St.Skill, Slow_Ahead);
+              (Track.Samples (Look).Line_V * St.Skill * Tired
+               * (1.0 + 0.012 * Ch.Aggression)
+               * (if Rushing then 1.10 else 1.0),
+               Slow_Ahead);
             Err : constant Float := Target - Sp;
          begin
             if not Lights_Out then
@@ -271,6 +320,29 @@ package body Session is
                St.Inputs.Brake := Clamp (-Err * 0.3, 0.0, 1.0);
             end if;
          end;
+      end;
+
+      --  Now and then, at a corner coming up, the dice say: too fast into it
+      declare
+         Here_S : constant Float := Track.Samples (Idx).S;
+         Gone : constant Float :=
+           (if Here_S >= St.Last_Roll then Here_S - St.Last_Roll
+            else Here_S + Track.Length - St.Last_Roll);
+      begin
+         if Lights_Out and then Ch.Mistakes > 0.0 and then Gone > 100.0 then
+            St.Last_Roll := Here_S;
+            declare
+               N : constant Natural := Track.Next_Note (Here_S);
+            begin
+               if N > 0 and then Track.Notes (N).Kind /= Track.Crest
+                 and then Track.Notes (N).S - Here_S < 120.0
+                 and then Ada.Numerics.Float_Random.Random (Dice) < Ch.Mistakes * 0.1
+               then
+                  St.Rush_Until := Track.Notes (N).S + 40.0;
+                  AI_Mistakes := AI_Mistakes + 1;
+               end if;
+            end;
+         end if;
       end;
 
       --  Lost on the grass or against a wall: back on the track
@@ -549,8 +621,8 @@ package body Session is
             end if;
             Vehicle.Place (Cars (I), Config.Kind, X, Z, H);
             Laps (I).Last_S := Track.Samples (Cars (I).Hint).S;
-            AI (I) := (Skill => Config.AI_Skill
-                         + 0.03 * (Ada.Numerics.Float_Random.Random (Dice) - 0.5),
+            AI (I) := (Skill => Config.AI_Skill + Character_Of (I).Pace
+                         + 0.01 * (Ada.Numerics.Float_Random.Random (Dice) - 0.5),
                        others => <>);
             AI (I).Inputs.Throttle := 0.0;
             if I = 1 and then Config.Assist.Mode = Paddles then
