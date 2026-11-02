@@ -148,7 +148,7 @@ The AI rides it too, round every circuit and stage.
 |---|---|---|---|
 | Steering, pedals | Left stick, RT / LT | Arrow keys | drive |
 | Paddles | RB / LB | A / Z | shift up / down |
-| H-shifter | | | choose an H-shifter gearbox in the menu |
+| H-shifter | | | choose an H-shifter gearbox in the menu (only with the wheel; the motorcycle is always sequential) |
 | L3 | X (hold) | Space | handbrake (on the motorcycle: the rear brake) |
 | | | X (hold) | reverse, automatic gearbox |
 | Triangle | Y | C | camera: cockpit, hood, chase, far chase, trackside |

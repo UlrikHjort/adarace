@@ -416,6 +416,13 @@ package body App is
       S.Laps := (case Integer (Combo_Laps.Get_Active) is
                     when 0 => 3, when 1 => 5, when 2 => 10, when others => 20);
       S.Assist.Mode := Vehicle.Gearbox_Mode'Val (Integer (Combo_Gear.Get_Active));
+      --  An H-shifter needs the wheel's lever, and a motorcycle's box is
+      --  sequential: otherwise it would sit in neutral
+      if S.Assist.Mode in Vehicle.H_Auto_Clutch | Vehicle.H_Clutch
+        and then (Vehicle.Is_Bike (S.Kind) or else not Sim_Loop.Wheel_Present)
+      then
+         S.Assist.Mode := Vehicle.Paddles;
+      end if;
       S.Assist.Abs_On := Combo_Abs.Get_Active = 0;
       S.Assist.Tc_On := Combo_Tc.Get_Active = 0;
       S.Assist.Wear_Rate := (case Integer (Combo_Wear.Get_Active) is
