@@ -842,6 +842,9 @@ package body App is
             Sim_Loop.Halt;
             Session.Force_AI := True;
             Session.Stunt_Riders := Env ("ADARACE_STUNT") /= "";
+            if Env ("ADARACE_FALL_AT") /= "" then
+               Session.Fall_At := Float'Value (Env ("ADARACE_FALL_AT"));
+            end if;
             Sim_Loop.Resume;
          end if;
          if Env ("ADARACE_DEMO_CAM") /= "" then

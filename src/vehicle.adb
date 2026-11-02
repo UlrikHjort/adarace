@@ -442,6 +442,10 @@ package body Vehicle is
    procedure Walls (C : in out Car; S : Spec);
 
    Bike_Slip : constant := 0.05;
+   Bike_Heat : constant := 7.0E-4;   --  degrees a joule of tyre work: a narrow tyre runs hot
+
+   function Temp_Grip (T : Float) return Float is
+     (Clamp (1.0 - ((T - 85.0) / 170.0) ** 2, 0.88, 1.0));
 
    function Lean_Limit (S : Spec) return Float is
      (Arctan (S.Mu * 0.95));
@@ -482,11 +486,20 @@ package body Vehicle is
          C.Wheels (W).Off_Y := S.Radius;
       end loop;
       Ground_Pitch := Arctan ((Front.Y - Rear.Y) / L);
-      Grip_F := S.Mu * Surface_Grip (Front.Surf);
-      Grip_R := S.Mu * Surface_Grip (Rear.Surf);
+      --  Cold or overheated rubber grips less, as on a car
+      Grip_F := S.Mu * Surface_Grip (Front.Surf) * Temp_Grip (C.Wheels (1).Temp);
+      Grip_R := S.Mu * Surface_Grip (Rear.Surf) * Temp_Grip (C.Wheels (3).Temp);
 
       --  Down: it slides along on its side until it stops
       if C.Fallen_T > 0.0 then
+         --  The rider leaves the bike at its speed, and his leathers slide
+         --  less far than its metal
+         if C.Fallen_T < Dt * 1.5 then
+            C.Rider_Vx := C.Vx;
+            C.Rider_Gap := 0.0;
+         end if;
+         C.Rider_Vx := Float'Max (0.0, C.Rider_Vx - Dt * 0.8 * G_Acc);
+         C.Rider_Gap := C.Rider_Gap + Dt * (C.Vx - C.Rider_Vx);
          C.Fallen_T := C.Fallen_T + Dt;
          C.Vx := Float'Max (0.0, C.Vx - Dt * 0.55 * G_Acc);
          C.Vy := C.Vy * (1.0 - Dt * 3.0);
@@ -636,18 +649,26 @@ package body Vehicle is
 
             --  Rubber goes with the work the tyres do, a few per cent of it
             --  sliding; the rear carries the drive
-            if A.Wear_Rate > 0.0 then
-               declare
-                  Work : constant Float := S.Mass * V * Bike_Slip
-                    * (abs Ax_Want + abs (V * C.Rate));
-               begin
-                  for W in Wheel_Id loop
-                     C.Wheels (W).Wear := Float'Min
-                       (1.0, C.Wheels (W).Wear + Dt * A.Wear_Rate * Wear_Per_Joule * Work
-                          * (if W >= 3 then 0.6 else 0.4));
-                  end loop;
-               end;
-            end if;
+            --  and warms them, as a car's; the air cools them
+            declare
+               Work : constant Float := S.Mass * V * Bike_Slip
+                 * (abs Ax_Want + abs (V * C.Rate));
+               Cool : constant Float := 0.012 + 0.0007 * V;
+            begin
+               for W in Wheel_Id loop
+                  declare
+                     WS : Wheel_State renames C.Wheels (W);
+                     Share : constant Float := (if W >= 3 then 0.6 else 0.4)
+                       * (if WS.Surf = Dirt then 0.2 else 1.0);
+                  begin
+                     if A.Wear_Rate > 0.0 then
+                        WS.Wear := Float'Min
+                          (1.0, WS.Wear + Dt * A.Wear_Rate * Wear_Per_Joule * Work * Share);
+                     end if;
+                     WS.Temp := WS.Temp + Dt * (Work * Share * Bike_Heat - Cool * (WS.Temp - 28.0));
+                  end;
+               end loop;
+            end;
 
             C.Throttle_Eff := Throttle;
             C.Vx := Float'Max (0.0, C.Vx + Dt * Ax_Want);

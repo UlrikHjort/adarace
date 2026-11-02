@@ -128,6 +128,7 @@ package Session is
    end record;
    Remote : Remote_View;
    Stunt_Riders : Boolean := False;   --  motorcycles ridden for show (videos)
+   Fall_At : Float := 0.0;   --  (pictures) the AI rider of car 1 falls this far into the lap, s
    Online_Ready : Boolean := False;   --  both there: the lights may start
 
    Second_Hands : Vehicle.Inputs;

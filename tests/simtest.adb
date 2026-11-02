@@ -327,6 +327,21 @@ procedure Simtest is
          Ride (Raw);
       end loop;
       Check (C.Fallen_T > 0.0, "a hard brake at full lean without ABS throws it down");
+      N := (others => <>);
+      for I in 1 .. 2000 loop
+         Ride (Raw);
+      end loop;
+      Check (C.Rider_Gap > 1.0 and then C.Rider_Vx < C.Vx + 0.01,
+             "the rider slides off behind the bike:" & Img (C.Rider_Gap) & " m");
+      --  Tyres warm with work, and cool in the air
+      Fresh (90.0);
+      N.Steer := 0.5;
+      N.Throttle := 0.3;
+      for I in 1 .. 20_000 loop
+         Ride (A);
+      end loop;
+      Check (C.Wheels (3).Temp > 75.0 and then C.Wheels (3).Temp < 110.0,
+             "hard cornering brings the tyres up to temperature:" & Img (C.Wheels (3).Temp) & " C");
 
       --  Full throttle in first without the anti-wheelie: the front comes up
       Fresh (90.0);

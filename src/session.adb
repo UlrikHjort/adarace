@@ -957,6 +957,12 @@ package body Session is
                               Mode => Automatic, Damage => Config.Assist.Damage, others => <>));
             end if;
          end if;
+         if I = 1 and then Force_AI and then Fall_At > 0.0
+           and then Laps (1).Lap_Time >= Fall_At and then Vehicle.Is_Bike (Cars (1).Kind)
+         then
+            Cars (1).Fallen_T := Vehicle.Dt;
+            Fall_At := 0.0;
+         end if;
          --  A rider down gets up after a while, back on the road
          if Cars (I).Fallen_T > Fall_Time and then I <= (if Config.Two_Players then 2 else 1) then
             if I = 1 then

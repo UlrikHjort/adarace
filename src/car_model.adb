@@ -693,9 +693,6 @@ package body Car_Model is
       Dark : constant Color := (0.06, 0.06, 0.065);
       Steel : constant Color := (0.45, 0.46, 0.48);
       None : constant Color := (0.0, 0.0, 0.0);
-      Leather : constant Color := (0.05, 0.05, 0.06);
-      Stripe : constant Color := (0.85, 0.85, 0.86);
-      Helmet : constant Color := (0.92, 0.92, 0.93);
       Head_Top : constant Vec3 := (0.0, 0.88, -0.56);   --  the steering head
       Pivot : constant Vec3 := (0.0, 0.46, 0.22);       --  the swingarm's
    begin
@@ -745,7 +742,15 @@ package body Car_Model is
       --  Clip-on bars
       Box (B, (-0.30, Bars_Y - 0.02, Bars_Z - 0.02), (0.30, Bars_Y + 0.02, Bars_Z + 0.02), Black);
 
-      --  The rider, tucked in
+   end Bike_Body;
+
+   --  The rider, tucked in: a mesh of his own, posed as he rides and falls
+   procedure Bike_Rider (B : in out Builder) is
+      Leather : constant Color := (0.05, 0.05, 0.06);
+      Stripe : constant Color := (0.85, 0.85, 0.86);
+      Helmet : constant Color := (0.92, 0.92, 0.93);
+      Black : constant Color := (0.02, 0.02, 0.025);
+   begin
       declare
          Hip : constant Vec3 := (0.0, 0.98, 0.16);
          Shoulder : constant Vec3 := (0.0, 1.12, -0.20);
@@ -771,7 +776,7 @@ package body Car_Model is
             end;
          end loop;
       end;
-   end Bike_Body;
+   end Bike_Rider;
 
    --  What the rider sees: the top of the screen, the dash, the bars
    procedure Bike_Cockpit (B : in out Builder) is
@@ -813,13 +818,14 @@ package body Car_Model is
       for K in Car_Kind loop
          declare
             S : constant Spec := Spec_Of (K);
-            Body_B, Wheel_B, Cock_B, Steer_B : Builder;
+            Body_B, Wheel_B, Cock_B, Steer_B, Rider_B : Builder;
          begin
             if Is_Bike (K) then
                Bike_Body (Body_B);
                Wheel (Wheel_B, S.Radius, 0.17);
                Bike_Cockpit (Cock_B);
                Bike_Bars (Steer_B);
+               Bike_Rider (Rider_B);
             else
                Loft (Body_B, K);
                Wheel (Wheel_B, S.Radius, (case K is when Race_GT3 | Hyper_AWD => 0.30,
@@ -828,7 +834,8 @@ package body Car_Model is
                Cockpit (Cock_B, K);
                Steering_Wheel (Steer_B, K);
             end if;
-            Meshes (K) := (Upload (Body_B), Upload (Wheel_B), Upload (Cock_B), Upload (Steer_B));
+            Meshes (K) := (Upload (Body_B), Upload (Wheel_B), Upload (Cock_B), Upload (Steer_B),
+                           Upload (Rider_B));
          end;
       end loop;
    end Build;

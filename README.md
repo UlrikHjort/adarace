@@ -140,8 +140,13 @@ It turns from that lean, not from the bars.
 - **Controls:** the front brake is the brake pedal, and the rear brake is the handbrake
   (X on a controller, Space on the keyboard). On a controller, the stick asks for a share
   of the lean the tyres allow, so full stick is the most the bike can lean at any speed.
+- **The rider** hangs off the inside of the bike in corners and tucks in behind the screen
+  at speed. In a crash, rider and bike slide apart down the road, the bike further on its
+  metal than he does in his leathers.
+- **Tyres** warm with the work they do and cool in the air. Around 80 °C they grip best, and
+  cold or overheated they give up a little grip, as on the cars.
 - **Views:** in the cockpit camera you look out of the helmet, over the clocks, and the
-  horizon tilts with the lean.
+  horizon tilts with the lean. After a fall the camera pulls back to watch the slide.
 
 The AI rides it too, round every circuit and stage.
 
