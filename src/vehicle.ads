@@ -109,6 +109,7 @@ package Vehicle is
       Wear_Rate : Float := 0.0;      --  how fast the tyres go, 1 as in life
       Fuel_Use  : Boolean := False;
       Damage    : Float := 0.0;      --  how much a hit does, 1 as in life
+      Stunt     : Boolean := False;  --  a show rider: wheelies and stoppies held
    end record;
 
    subtype Wheel_Id is Positive range 1 .. 4;   --  FL, FR, RL, RR

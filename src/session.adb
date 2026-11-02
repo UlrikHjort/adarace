@@ -730,6 +730,11 @@ package body Session is
       Restart;
    end Start;
 
+   procedure Seed_Dice (Seed : Integer) is
+   begin
+      Ada.Numerics.Float_Random.Reset (Dice, Seed);
+   end Seed_Dice;
+
    Fall_Time : constant := 3.0;   --  seconds on the ground after a fall
 
    procedure Reset_Player is
@@ -873,12 +878,13 @@ package body Session is
    end Follow_Remote;
 
    procedure Step (Player : Vehicle.Inputs) is
-      Ai_Assists : constant Assists := (Abs_On => True, Tc_On => True, Mode => Automatic, others => <>);
+      Ai_Assists : constant Assists :=
+        (Abs_On => True, Tc_On => True, Mode => Automatic, Stunt => Stunt_Riders, others => <>);
       --  (Car 1 in the menu's demo keeps its wear switches, for the tests)
       Demo_Assists : constant Assists :=
         (Abs_On => True, Tc_On => True, Mode => Automatic,
          Wear_Rate => Config.Assist.Wear_Rate, Fuel_Use => Config.Assist.Fuel_Use,
-         Damage => Config.Assist.Damage);
+         Damage => Config.Assist.Damage, Stunt => Stunt_Riders);
       Hands : Vehicle.Inputs := Player;
    begin
       Tick := Tick + 1;
@@ -938,7 +944,12 @@ package body Session is
                end if;
             end if;
             if I = 1 then
-               Vehicle.Step (Cars (I), Player_Spec, Hands, Config.Assist);
+               declare
+                  Aids : Assists := Config.Assist;
+               begin
+                  Aids.Stunt := Stunt_Riders and then Force_AI;
+                  Vehicle.Step (Cars (I), Player_Spec, Hands, Aids);
+               end;
             else
                --  The second player: on the keys, so the gearbox shifts itself
                Vehicle.Step (Cars (I), Player_Spec, Second_Hands,

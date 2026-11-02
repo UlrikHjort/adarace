@@ -1049,7 +1049,8 @@ package body Renderer is
                      Chase_Heading := Chase_Heading + 2.0 * Pi;
                   end if;
                   declare
-                     Back : constant Vec3 := (Sin (Chase_Heading), 0.0, -Cos (Chase_Heading));
+                     Back : constant Vec3 :=
+                       (Sin (Chase_Heading + Options.Orbit), 0.0, -Cos (Chase_Heading + Options.Orbit));
                      Ground : Float;
                      Hint : Natural := Track.Find_Nearest (P.X, P.Z);
                      Con : Track.Contact;
@@ -1059,7 +1060,7 @@ package body Renderer is
                      Track.Query (CX, CZ, Hint, Con);
                      Ground := Con.Y;
                      Eye := (CX, Float'Max (P.Y + High - 0.3, Ground + 1.0), CZ);
-                     Tgt := (P.X, P.Y + 0.55, P.Z) + 2.0 * Fwd_W;
+                     Tgt := (P.X, P.Y + 0.55, P.Z) + (2.0 * Cos (Options.Orbit)) * Fwd_W;
                   end;
                   Cam_Fov := Fov + Clamp (P.Speed / 90.0, 0.0, 1.0) * 0.15;
                end;

@@ -830,6 +830,7 @@ package body App is
             --  (for the automated checks) the AI drives, under the player's rules
             Sim_Loop.Halt;
             Session.Force_AI := True;
+            Session.Stunt_Riders := Env ("ADARACE_STUNT") /= "";
             Sim_Loop.Resume;
          end if;
          if Env ("ADARACE_DEMO_CAM") /= "" then
@@ -1582,6 +1583,9 @@ package body App is
       end if;
       if Env ("ADARACE_LESSON") /= "" then
          Combo_Lesson.Set_Active (Gint'Value (Env ("ADARACE_LESSON")));
+      end if;
+      if Env ("ADARACE_ORBIT") /= "" then
+         Options.Orbit := Float'Value (Env ("ADARACE_ORBIT")) * Ada.Numerics.Pi / 180.0;
       end if;
       if Env ("ADARACE_CAMERA") /= "" then
          Options.Camera := Renderer.Camera_Kind'Value (Env ("ADARACE_CAMERA"));

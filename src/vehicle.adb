@@ -577,7 +577,9 @@ package body Vehicle is
                if A.Tc_On then
                   Drive := Float'Min (Drive, Room_R);
                end if;
-               Over_R := Float'Max (Brake_R, Drive) / Float'Max (1.0, Room_R);
+               --  (what the ABS lets through, it does not lock)
+               Over_R := Float'Max ((if Abs_Hold then Float'Min (Brake_R, Room_R) else Brake_R), Drive)
+                 / Float'Max (1.0, Room_R);
                Ax_Want := (Drive
                            - Float'Min (Brake_F, (if Abs_Hold then Room_F else Room_F * 1.1))
                            - Float'Min (Brake_R, Room_R) - Drag) / S.Mass;
@@ -602,7 +604,17 @@ package body Vehicle is
                Dive : constant Float := -Ax_Want * S.H_Cg - G_Acc * S.A; --  > 0: rear lifts
                Target : Float := 0.0;
             begin
-               if Tip > 0.0 then
+               if A.Stunt and then abs C.Roll < 0.12 and then I.Throttle > 0.7
+                 and then V > 8.0 and then V < 62.0
+                 and then (Tip > -4.5 or else (C.Pitch - Ground_Pitch > 0.1 and then Tip > -9.0))
+               then
+                  --  A show rider: up on the back wheel down the straights,
+                  --  held at the balance with the throttle
+                  Target := Float'Min (0.42, 0.24 + Float'Max (0.0, Tip + 4.5) * 0.05);
+               elsif A.Stunt and then abs C.Roll < 0.12 and then Dive > -1.5 and then Pedal > 0.5 then
+                  --  and the back wheel up under the brakes
+                  Target := -Float'Min (0.22, 0.08 + (Dive + 1.5) * 0.06);
+               elsif Tip > 0.0 then
                   Target := Float'Min (0.6, Tip * 0.3);
                   if A.Tc_On then
                      Ax_Want := G_Acc * S.B / S.H_Cg;   --  held at the balance

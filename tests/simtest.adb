@@ -1410,6 +1410,7 @@ procedure Simtest is
       R.AI_Skill := 0.93;
       Session.Force_AI := True;
       Session.AI_Mistakes := 0;
+      Session.Seed_Dice (2026);
       Session.Start (R);
       for I in 1 .. 900_000 loop
          Session.Step (N);

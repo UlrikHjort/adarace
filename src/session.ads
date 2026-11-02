@@ -111,6 +111,9 @@ package Session is
    Reset_Penalty : constant := 15.0;   --  seconds, on a rally stage
 
    procedure Reset_Player;
+
+   procedure Seed_Dice (Seed : Integer);
+   --  The AI's chances the same every time (for the tests)
    --  Back onto the racing line, stopped (costs the lap; on a stage, time)
 
    --  Online: the other machine's car as last heard, and how long ago
@@ -124,6 +127,7 @@ package Session is
       Have : Boolean := False;
    end record;
    Remote : Remote_View;
+   Stunt_Riders : Boolean := False;   --  motorcycles ridden for show (videos)
    Online_Ready : Boolean := False;   --  both there: the lights may start
 
    Second_Hands : Vehicle.Inputs;

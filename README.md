@@ -30,7 +30,8 @@ motorcycle, a driving school, night, weather and seasons.
 | A lesson passed, with the coach's word | The menu and car setup |
 
 All of it is the game itself with the AI driver at the wheel, made by
-`scripts/make_media.sh`. `make demo` records a demo video with sound in the same way.
+`scripts/make_media.sh`. `make demo` records a demo video with sound in the same way, and
+`scripts/make_demo.sh bike` one of the motorcycle, ridden for show with wheelies and stoppies.
 
 ## Getting started
 
@@ -147,7 +148,7 @@ The AI rides it too, round every circuit and stage.
 | Wheel | Xbox controller | Keyboard | |
 |---|---|---|---|
 | Steering, pedals | Left stick, RT / LT | Arrow keys | drive |
-| Paddles | RB / LB | A / Z | shift up / down |
+| Paddles | LB / RB | A / Z | shift up / down |
 | H-shifter | | | choose an H-shifter gearbox in the menu (only with the wheel; the motorcycle is always sequential) |
 | L3 | X (hold) | Space | handbrake (on the motorcycle: the rear brake) |
 | | | X (hold) | reverse, automatic gearbox |

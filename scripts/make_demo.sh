@@ -8,7 +8,8 @@
 # out, and the lot joined behind a title.  The result: dist/adarace-demo.mp4,
 # and dist/adarace-demo-small.mp4 under 10 MB, which GitHub shows on a page.
 #
-#   scripts/make_demo.sh
+#   scripts/make_demo.sh          the cars
+#   scripts/make_demo.sh bike     the motorcycle, ridden for show
 #
 # A window opens for each scene; leave it be while it records.  Needs ffmpeg,
 # a sound server (the sound is taken from the game's own mixer, whatever the
@@ -16,7 +17,13 @@
 
 set -e
 cd "$(dirname "$0")/.."
-OUT=dist/adarace-demo.mp4
+WHAT=${1:-cars}
+case "$WHAT" in
+    cars) OUT=dist/adarace-demo.mp4 ;;
+    bike) OUT=dist/adarace-motorcycle.mp4 ;;
+    *) echo "scripts/make_demo.sh [cars|bike]"; exit 1 ;;
+esac
+SMALL=${OUT%.mp4}-small.mp4
 mkdir -p dist
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
@@ -80,6 +87,25 @@ fade=t=in:st=0:d=0.6,fade=t=out:st=$end:d=0.6[v]" -map "[v]" -map 1:a \
 }
 
 : > "$WORK/list.txt"
+if [ "$WHAT" = bike ]; then
+B="ADARACE_CAR=5 ADARACE_STUNT=1"
+card "ADARACE" "The Nordic 1000 R: a motorcycle that leans to turn" 4
+# shellcheck disable=SC2086
+scene "Up on the back wheel at 190 km/h" 4 8 $B ADARACE_TRACK=1 ADARACE_CAMERA=CHASE ADARACE_ORBIT=75.0
+# shellcheck disable=SC2086
+scene "Lights out: a pack of riders" 14 10 $B ADARACE_MODE=1 ADARACE_TRACK=1 ADARACE_CAMERA=CHASE
+# shellcheck disable=SC2086
+scene "Down the speedway on one wheel, in the golden hour" 5 7 $B ADARACE_TRACK=3 ADARACE_CAMERA=CHASE ADARACE_ORBIT=-65.0 ADARACE_TIME=2
+# shellcheck disable=SC2086
+scene "A stoppie into the hairpin" 48 9 $B ADARACE_TRACK=2 ADARACE_CAMERA=CHASE ADARACE_ORBIT=95.0
+# shellcheck disable=SC2086
+scene "From the helmet: the horizon leans with the bike" 26 12 $B ADARACE_MODE=1 ADARACE_TRACK=7 ADARACE_CAMERA=COCKPIT ADARACE_TIME=6
+# shellcheck disable=SC2086
+scene "Knee down at the harbour, at night" 84 9 $B ADARACE_MODE=1 ADARACE_TRACK=7 ADARACE_CAMERA=CHASE_FAR ADARACE_TIME=6
+# shellcheck disable=SC2086
+scene "And once more, for the camera" 30 7 $B ADARACE_TRACK=1 ADARACE_CAMERA=CHASE ADARACE_ORBIT=-80.0 ADARACE_TIME=4
+card "ADARACE" "Ride it with an Xbox controller: make run" 4
+else
 card "ADARACE" "A driving simulator in Ada, written by Claude Opus 5.5" 4
 scene "Rally: a forest stage, the co-driver calling the notes" 18 22 ADARACE_TRACK=4 ADARACE_CAR=2 ADARACE_CAMERA=CHASE
 scene "From the cockpit: live gauges, gravel under the floor" 24 12 ADARACE_TRACK=5 ADARACE_CAR=2 ADARACE_CAMERA=COCKPIT
@@ -89,12 +115,12 @@ scene "Rain, wipers going" 16 10 ADARACE_TRACK=1 ADARACE_CAR=0 ADARACE_CAMERA=CO
 scene "A race against the AI: lights out" 5 14 ADARACE_MODE=1 ADARACE_TRACK=1 ADARACE_CAR=1 ADARACE_CAMERA=CHASE ADARACE_TIME=2
 scene "Five cars, each its own engine: the Hyper, 540 kW" 14 9 ADARACE_TRACK=2 ADARACE_CAR=4 ADARACE_CAMERA=TRACKSIDE
 card "ADARACE" "Ada and GtkAda, physics at 1 kHz, a Logitech G29" 4
+fi
 
 ffmpeg -loglevel error -y -f concat -safe 0 -i "$WORK/list.txt" -c copy -movflags +faststart "$OUT"
 echo "$OUT ($(du -h "$OUT" | cut -f1), $(ffprobe -v error -show_entries format=duration -of csv=p=0 "$OUT" | cut -d. -f1) s)"
 
 # The small one: 720p, the bitrate held down until it is under 10 MB
-SMALL=dist/adarace-demo-small.mp4
 for CRF in 28 30 32 34; do
     ffmpeg -loglevel error -y -i "$OUT" -vf scale=1280:720 -c:v libx264 -preset slow -crf "$CRF" \
         -maxrate 850k -bufsize 1700k -c:a aac -b:a 96k -movflags +faststart "$SMALL"

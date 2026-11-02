@@ -607,11 +607,12 @@ package body Sim_Loop is
                         goto Next_Pad_Button;
                      end if;
                      case B is
-                        when Wheel.Paddle_Right =>
+                        --  (on the controller the left bumper shifts up)
+                        when Wheel.Paddle_Left =>
                            if not Pad_Is_Second then
                               Shared.Shift (True);
                            end if;
-                        when Wheel.Paddle_Left =>
+                        when Wheel.Paddle_Right =>
                            if not Pad_Is_Second then
                               Shared.Shift (False);
                            end if;
