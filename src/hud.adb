@@ -275,10 +275,16 @@ package body Hud is
             Pedal (0, F.Clutch, 0.3, 0.6, 1.0);
             Pedal (1, F.Brake, 1.0, 0.18, 0.12);
             Pedal (2, F.Throttle, 0.3, 0.95, 0.4);
-            Tyre (TX, PY + 12.0 * S, F.Temps (1), F.Slides (1), F.Wear (1));
-            Tyre (TX + 28.0 * S, PY + 12.0 * S, F.Temps (2), F.Slides (2), F.Wear (2));
-            Tyre (TX, PY + 64.0 * S, F.Temps (3), F.Slides (3), F.Wear (3));
-            Tyre (TX + 28.0 * S, PY + 64.0 * S, F.Temps (4), F.Slides (4), F.Wear (4));
+            if Vehicle.Is_Bike (Session.Config.Kind) then
+               --  A motorcycle: the front tyre above the rear
+               Tyre (TX + 14.0 * S, PY + 12.0 * S, F.Temps (1), F.Slides (1), F.Wear (1));
+               Tyre (TX + 14.0 * S, PY + 64.0 * S, F.Temps (3), F.Slides (3), F.Wear (3));
+            else
+               Tyre (TX, PY + 12.0 * S, F.Temps (1), F.Slides (1), F.Wear (1));
+               Tyre (TX + 28.0 * S, PY + 12.0 * S, F.Temps (2), F.Slides (2), F.Wear (2));
+               Tyre (TX, PY + 64.0 * S, F.Temps (3), F.Slides (3), F.Wear (3));
+               Tyre (TX + 28.0 * S, PY + 64.0 * S, F.Temps (4), F.Slides (4), F.Wear (4));
+            end if;
          end;
 
          --  Fuel and what is broken, over the tyres ---------------------------
