@@ -16,10 +16,12 @@ school, night, weather and seasons.
 |---|---|
 | ![The stage at night](docs/gifs/night.gif) | ![The stage in winter](docs/gifs/winter.gif) |
 | Night, on the headlamps | Winter, snow falling |
-| ![Rain from the cockpit](docs/gifs/rain.gif) | ![The start of a race](docs/gifs/race.gif) |
-| Rain, from the cockpit | The start of a race against the AI |
+| ![Rain from the cockpit](docs/gifs/rain.gif) | ![A night race on the street circuit](docs/gifs/race.gif) |
+| Rain, from the cockpit | A night race through Havnebyen |
 | ![The driving line in a lesson](docs/gifs/school.gif) | ![Autumn at dawn](docs/screenshots/autumn-dawn.jpg) |
 | The driving school and its coloured line | Autumn at dawn |
+| ![The Hyper on Boulevard Royal at dusk](docs/screenshots/boulevard.jpg) | ![Two players, split screen](docs/screenshots/split-screen.jpg) |
+| The Hyper on Boulevard Royal, at dusk | Two players on one screen |
 | ![A GT3 in the golden hour](docs/screenshots/gt3-golden.jpg) | ![Fog on the stage](docs/screenshots/rally-fog.jpg) |
 | A GT3 in the golden hour | Fog on the stage |
 | ![A lesson passed](docs/screenshots/lesson-passed.jpg) | ![The menu and car setup](docs/screenshots/menu.jpg) |

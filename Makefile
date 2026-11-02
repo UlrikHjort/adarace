@@ -1,4 +1,6 @@
 # AdaRace: a driving simulator in Ada
+# Copyright (c) 2026 Ulrik Hørlyk Hjort
+# SPDX-License-Identifier: MIT
 #
 #   make         build the game
 #   make run     build and start it

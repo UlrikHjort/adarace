@@ -1,3 +1,6 @@
+--  AdaRace: a driving simulator in Ada
+--  Copyright (c) 2026 Ulrik Hørlyk Hjort
+--  SPDX-License-Identifier: MIT
 project Wheelprobe is
    for Source_Dirs use ("src", "tests");
    for Source_Files use ("wheel.ads", "wheel.adb", "wheelprobe.adb");

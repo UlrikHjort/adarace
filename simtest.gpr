@@ -1,3 +1,6 @@
+--  AdaRace: a driving simulator in Ada
+--  Copyright (c) 2026 Ulrik Hørlyk Hjort
+--  SPDX-License-Identifier: MIT
 --  AdaRace: the headless physics tests (no GTK needed)
 project Simtest is
    for Source_Dirs use ("src", "tests");
