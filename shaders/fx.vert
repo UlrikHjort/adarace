@@ -1,3 +1,6 @@
+// AdaRace: a driving simulator in Ada
+// Copyright (c) 2026 Ulrik Hørlyk Hjort
+// SPDX-License-Identifier: MIT
 // Skid marks (triangles) and tyre smoke (points)
 #version 450 core
 layout(location = 0) in vec3 aPos;

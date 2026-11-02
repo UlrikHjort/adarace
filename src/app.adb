@@ -26,6 +26,7 @@ with Gtk.Combo_Box;
 with Gtk.Combo_Box_Text;
 with Gtk.Css_Provider;
 with Gtk.Enums;
+with Gtk.GEntry;
 with Gtk.Grid;
 with Gtk.Label;
 with Gtk.Main;
@@ -46,6 +47,7 @@ with Hud;
 with Hud_Layer;
 with Championship;
 with Rally;
+with Net;
 with Recorder;
 with Replay;
 with Renderer;
@@ -65,6 +67,7 @@ package body App is
    use type Renderer.Camera_Kind;
    use type Session.Mode_Kind;
    use type Session.Weather_Kind;
+   use type Net.Role;
 
    Window : Gtk.Window.Gtk_Window;
    Area   : GL_Area.Gtk_GL_Area;
@@ -325,14 +328,44 @@ package body App is
 
    function Two_Players return Boolean is (Combo_Mode.Get_Active = 5);
 
+   function Hosting return Boolean is (Combo_Mode.Get_Active = 6);
+   function Joining_Mode return Boolean is (Combo_Mode.Get_Active = 7);
+
+   --  Joining: looking for the host from the menu until it gives the race
+   Host_Entry : Gtk.GEntry.Gtk_Entry;
+   Joining : Boolean := False;
+   Join_Wait : Natural := 0;
+   Join_Track, Join_Laps : Natural := 0;
+
    function Lesson_Chosen return School.Lesson_Id is
      (School.Lesson_Id (Integer (Combo_Lesson.Get_Active) + 1));
 
    function Drive_Track return Track.Track_Id is
-     (if In_School then School.Circuit (Lesson_Chosen)
+     (if Joining_Mode and then Join_Track > 0 then Track.Track_Id (Join_Track)
+      elsif In_School then School.Circuit (Lesson_Chosen)
       elsif In_Rally then Rally.Current_Road
       elsif In_Season then Championship.Current_Road
       else Chosen_Track);
+
+   procedure Begin_Drive;
+
+   --  Online, from the menu: the host opens and drives; the guest first finds the host
+   procedure Begin_Online is
+   begin
+      if Hosting then
+         Net.Open (Net.Host);
+      elsif Joining_Mode and then Join_Track = 0 then
+         Net.Open (Net.Guest, Host_Entry.Get_Text);
+         if Net.Current_Role = Net.Off then
+            Status.Set_Text ("Cannot reach " & Host_Entry.Get_Text);
+         else
+            Joining := True;
+            Status.Set_Text ("Looking for the host at " & Host_Entry.Get_Text & " ...");
+         end if;
+      end if;
+   end Begin_Online;
+
+   procedure Begin_From_Menu;
 
    procedure Begin_Drive is
       S : Session.Settings;
@@ -364,6 +397,15 @@ package body App is
          S.Mode := Session.Race;
       end if;
       S.Two_Players := Two_Players and then not Track.Is_Stage;
+      S.Online := (Hosting or else Joining_Mode) and then not Track.Is_Stage;
+      if S.Online then
+         S.Mode := Session.Race;
+         S.Opponents := 1;
+         if Joining_Mode and then Join_Laps > 0 then
+            S.Laps := Join_Laps;
+         end if;
+         Session.Online_Ready := False;
+      end if;
       if S.Two_Players then
          S.Mode := Session.Race;
          --  (the second player counts as one of the cars)
@@ -374,6 +416,13 @@ package body App is
       S.Laps := (case Integer (Combo_Laps.Get_Active) is
                     when 0 => 3, when 1 => 5, when 2 => 10, when others => 20);
       S.Assist.Mode := Vehicle.Gearbox_Mode'Val (Integer (Combo_Gear.Get_Active));
+      --  An H-shifter needs the wheel's lever, and a motorcycle's box is
+      --  sequential: otherwise it would sit in neutral
+      if S.Assist.Mode in Vehicle.H_Auto_Clutch | Vehicle.H_Clutch
+        and then (Vehicle.Is_Bike (S.Kind) or else not Sim_Loop.Wheel_Present)
+      then
+         S.Assist.Mode := Vehicle.Paddles;
+      end if;
       S.Assist.Abs_On := Combo_Abs.Get_Active = 0;
       S.Assist.Tc_On := Combo_Tc.Get_Active = 0;
       S.Assist.Wear_Rate := (case Integer (Combo_Wear.Get_Active) is
@@ -420,8 +469,26 @@ package body App is
       Say (Track.Name (Chosen_Track) & "  -  " & Vehicle.Name (S.Kind), 3.0);
    end Begin_Drive;
 
+   --  DRIVE in the menu: an online race goes by way of the network
+   procedure Begin_From_Menu is
+   begin
+      if Hosting then
+         Begin_Online;
+         Begin_Drive;
+      elsif Joining_Mode then
+         Join_Track := 0;
+         Begin_Online;
+      else
+         Net.Close;
+         Begin_Drive;
+      end if;
+   end Begin_From_Menu;
+
    procedure To_Menu is
    begin
+      Net.Close;
+      Joining := False;
+      Join_Track := 0;
       In_Menu := True;
       Pause_Box.Hide;
       Menu.Show;
@@ -546,7 +613,7 @@ package body App is
       end if;
       if In_Menu then
          if K = GDK_Return or else K = GDK_KP_Enter then
-            Begin_Drive;
+            Begin_From_Menu;
             return True;
          elsif K = GDK_Escape then
             Gtk.Main.Main_Quit;
@@ -699,7 +766,7 @@ package body App is
                      end if;
                   end;
                when Cross | Enter =>
-                  Begin_Drive;
+                  Begin_From_Menu;
                when others => null;
             end case;
          elsif Replay.Active then
@@ -758,11 +825,12 @@ package body App is
       Start_Demo;
       Audio.Start;
       if Env ("ADARACE_AUTOSTART") /= "" then
-         Begin_Drive;
+         Begin_From_Menu;
          if Env ("ADARACE_AUTOPILOT") /= "" then
             --  (for the automated checks) the AI drives, under the player's rules
             Sim_Loop.Halt;
             Session.Force_AI := True;
+            Session.Stunt_Riders := Env ("ADARACE_STUNT") /= "";
             Sim_Loop.Resume;
          end if;
          if Env ("ADARACE_DEMO_CAM") /= "" then
@@ -799,7 +867,8 @@ package body App is
                       when Vehicle.Race_GT3 => Audio.V10,
                       when Vehicle.Rally_4WD => Audio.Turbo_Four,
                       when Vehicle.Classic_RWD => Audio.Old_Four,
-                      when Vehicle.Hyper_AWD => Audio.V10);
+                      when Vehicle.Hyper_AWD => Audio.V10,
+                      when Vehicle.Sport_Bike => Audio.Bike_Four);
       P.Rain := Track.Wet * (if Session.Config.Weather = Session.Rain then 1.0 else 0.0);
       P.Snowy := Track.Snow > 0.5;
       P.Wipers := Session.Config.Weather in Session.Rain | Session.Snowing;
@@ -1073,6 +1142,23 @@ package body App is
       pragma Unreferenced (Widget, Frame_Clock);
    begin
       Wheel_Buttons;
+      --  Joining: say hello until the host gives the race, then drive it
+      if Joining then
+         Join_Wait := Join_Wait + 1;
+         if Join_Wait mod 30 = 0 then
+            Net.Send_Hello;
+         end if;
+         declare
+            T, L : Natural;
+         begin
+            if Net.Go_Received (T, L) and then T in 1 .. Track.Track_Count then
+               Joining := False;
+               Join_Track := T;
+               Join_Laps := L;
+               Begin_Drive;
+            end if;
+         end;
+      end if;
       --  A stage of a rally finished: its times go on the table
       if Rally.Active and then not In_Menu and then not Rally.Finished_Stage then
          declare
@@ -1173,7 +1259,7 @@ package body App is
    procedure Start_Clicked (Self : access Gtk.Button.Gtk_Button_Record'Class) is
       pragma Unreferenced (Self);
    begin
-      Begin_Drive;
+      Begin_From_Menu;
    end Start_Clicked;
 
    procedure On_Destroy (Self : access Gtk.Widget.Gtk_Widget_Record'Class) is
@@ -1249,7 +1335,7 @@ package body App is
       Combo_Car.Set_Active (0);
       Add_Row ("Car", Combo_Car);
 
-      Make (Combo_Mode, "Mode", "Hot laps, against your ghost|Race against the AI|Driving school|Rally: every stage in turn|Championship: a race at every circuit|Two players: split screen");
+      Make (Combo_Mode, "Mode", "Hot laps, against your ghost|Race against the AI|Driving school|Rally: every stage in turn|Championship: a race at every circuit|Two players: split screen|Online: host a race|Online: join a race");
       Gtk_New (Combo_Lesson);
       for L in School.Lesson_Id loop
          Combo_Lesson.Append_Text (School.Title (L));
@@ -1277,6 +1363,9 @@ package body App is
       Combo_Weather.On_Changed (Changed_Choice'Access);
       Combo_Season.On_Changed (Changed_Choice'Access);
 
+      Gtk.GEntry.Gtk_New (Host_Entry);
+      Host_Entry.Set_Text ("localhost");
+      Add_Row ("Host to join", Host_Entry);
       Gtk.Scale.Gtk_New_With_Range (FFB_Scale, Gtk.Enums.Orientation_Horizontal, 0.0, 100.0, 5.0);
       FFB_Scale.Set_Value (70.0);
       Add_Row ("Force feedback", FFB_Scale);
@@ -1480,6 +1569,9 @@ package body App is
       if Env ("ADARACE_REPLAY_AT") /= "" then
          Replay_From := Natural'Value (Env ("ADARACE_REPLAY_AT"));
       end if;
+      if Env ("ADARACE_JOIN") /= "" then
+         Host_Entry.Set_Text (Env ("ADARACE_JOIN"));
+      end if;
       if Env ("ADARACE_WEATHER") /= "" then
          Combo_Weather.Set_Active (Gint'Value (Env ("ADARACE_WEATHER")));
       end if;
@@ -1491,6 +1583,9 @@ package body App is
       end if;
       if Env ("ADARACE_LESSON") /= "" then
          Combo_Lesson.Set_Active (Gint'Value (Env ("ADARACE_LESSON")));
+      end if;
+      if Env ("ADARACE_ORBIT") /= "" then
+         Options.Orbit := Float'Value (Env ("ADARACE_ORBIT")) * Ada.Numerics.Pi / 180.0;
       end if;
       if Env ("ADARACE_CAMERA") /= "" then
          Options.Camera := Renderer.Camera_Kind'Value (Env ("ADARACE_CAMERA"));

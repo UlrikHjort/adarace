@@ -891,6 +891,31 @@ package body Track is
         and then -D - S.W_L - S.Kerb_L < Pit_Wide;
    end In_Pit_Box;
 
+   function Lane_Here (Index : Natural) return Boolean is
+     (not Is_Stage
+      and then (Samples (Index).S >= Length - Pit_Lane_In or else Samples (Index).S <= Pit_Lane_Out));
+
+   function In_Pit_Lane (Index : Natural; D : Float) return Boolean is
+      S : Sample renames Samples (Index);
+   begin
+      return Lane_Here (Index)
+        and then D < 0.0
+        and then -D > S.W_L + S.Kerb_L
+        and then -D - S.W_L - S.Kerb_L < Pit_Wide;
+   end In_Pit_Lane;
+
+   --  Room for the lane: no kerb on that side, the wall beyond it
+   procedure Make_Pit_Lane is
+   begin
+      for I in 0 .. Count - 1 loop
+         if Lane_Here (I) then
+            Samples (I).Kerb_L := 0.0;
+            Samples (I).Gravel_L := False;
+            Samples (I).Wall_L := Float'Max (Samples (I).Wall_L, Samples (I).W_L + Pit_Wide + 2.0);
+         end if;
+      end loop;
+   end Make_Pit_Lane;
+
    procedure Query (X, Z : Float; Hint : in out Natural; C : out Contact) is
       I : Natural;
       T, D : Float;
@@ -922,7 +947,7 @@ package body Track is
               + 0.035 * (Noise (S / 2.9, D / 2.2 + 9.0) - 0.5)
               + 0.014 * (Noise (S / 0.65, D / 0.6 + 30.0) - 0.5)
               - 0.02 * Smooth (0.0, 0.5, 1.0 - abs (abs (D) - 0.85));
-         elsif Over <= 0.0 or else In_Pit_Box (I, D) then
+         elsif Over <= 0.0 or else In_Pit_Lane (I, D) then
             C.Surf := Asphalt;
             C.Y := Road + 0.0035 * (Noise (S / 3.5, D / 2.5) - 0.5)
                         + 0.0016 * (Noise (S / 1.1, D / 0.8 + 50.0) - 0.5);
@@ -1496,6 +1521,7 @@ package body Track is
       Build_Line (Roads (T).Points.all);
       Frames;
       Edges;
+      Make_Pit_Lane;
       Pool_Count := Roads (T).Water_Count;
       Pools := Roads (T).Waters;
       Has_Water := Pool_Count > 0;

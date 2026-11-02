@@ -559,6 +559,9 @@ void main()
     }
     vec3 H = normalize(uSunDir + V);
     float spec = min(gloss * pow(max(dot(N, H), 0.0), shine) * (shine + 8.0) / 60.0, 1.2);
+    // Car paint: a second, sharper shine from the clear coat over it
+    if (mat == 5.0)
+        spec += min(1.6, pow(max(dot(N, H), 0.0), 900.0) * 2.5);
     // The sky from above, the ground's bounce from below
     vec3 ambient = mix(vec3(0.10, 0.11, 0.09) * day, uSkyColor * 1.1, 0.5 + 0.5 * N.y);
     // A town at night: street lamps over the road and the glow off the sky

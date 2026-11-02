@@ -10,7 +10,7 @@ with Codriver;
 
 package Audio is
 
-   type Engine_Kind is (V8, V10, Turbo_Four, Old_Four);
+   type Engine_Kind is (V8, V10, Turbo_Four, Old_Four, Bike_Four);
 
    type Voice is record
       Rpm   : Float := 0.0;

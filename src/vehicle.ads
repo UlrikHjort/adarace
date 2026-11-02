@@ -14,7 +14,7 @@ package Vehicle is
 
    Dt : constant := 0.001;
 
-   type Car_Kind is (Road_GT, Race_GT3, Rally_4WD, Classic_RWD, Hyper_AWD);
+   type Car_Kind is (Road_GT, Race_GT3, Rally_4WD, Classic_RWD, Hyper_AWD, Sport_Bike);
 
    function Name (K : Car_Kind) return String;
 
@@ -43,6 +43,7 @@ package Vehicle is
       Snow_Keep : Float;   --  grip it keeps on snow
       Engine    : Curve;
       Engine_I  : Float;
+      Rpm_Step  : Float;   --  the engine curve's points are this far apart, rpm
       Idle, Red_Line : Float;
       Gears     : Ratios;
       Final     : Float;
@@ -80,6 +81,11 @@ package Vehicle is
    --  What the weather leaves of this tyre's grip on the road, 0 .. 1
 
    function Fuel_Per_Km (K : Car_Kind) return Float;
+
+   function Is_Bike (K : Car_Kind) return Boolean is (K = Sport_Bike);
+
+   function Lean_Limit (S : Spec) return Float;
+   --  The most a motorcycle leans on its tyres' grip, radians
    --  At racing pace, kg
 
    type Gearbox_Mode is (Paddles, H_Auto_Clutch, H_Clutch, Automatic);
@@ -103,6 +109,7 @@ package Vehicle is
       Wear_Rate : Float := 0.0;      --  how fast the tyres go, 1 as in life
       Fuel_Use  : Boolean := False;
       Damage    : Float := 0.0;      --  how much a hit does, 1 as in life
+      Stunt     : Boolean := False;  --  a show rider: wheelies and stoppies held
    end record;
 
    subtype Wheel_Id is Positive range 1 .. 4;   --  FL, FR, RL, RR
@@ -164,6 +171,7 @@ package Vehicle is
       Toe      : Float := 0.0;   --  bent steering, rad: + pulls right
       Hit_X, Hit_Y : Float := 0.0;  --  where on the body it was hit last
       Seen_Impact : Float := 0.0;
+      Fallen_T : Float := 0.0;   --  a motorcycle down: seconds on the ground
    end record;
 
    procedure Place (C : in out Car; K : Car_Kind; X, Z, Heading : Float);

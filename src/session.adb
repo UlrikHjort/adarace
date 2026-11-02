@@ -15,11 +15,14 @@ package body Session is
    use Ada.Numerics.Elementary_Functions;
    use Vehicle;
    use type Track.Surface_Kind;
+   use type Track.Note_Kind;
 
    Pi : constant := 3.14159_26535;
 
    type AI_State is record
       Skill     : Float := 0.95;
+      Rush_Until : Float := -1.0;   --  a mistake under way: on until this S
+      Last_Roll  : Float := 0.0;    --  where the dice were last thrown
       Offset    : Float := 0.0;   --  lateral, avoiding others
       Stuck_T   : Float := 0.0;
       Inputs    : Vehicle.Inputs;
@@ -43,9 +46,72 @@ package body Session is
 
    Parked : Float := 0.0;
 
+   function Character_Of (I : Car_Index) return Character is
+     (case I is
+         when 2 => (Pace => 0.012, Aggression => 0.3, Defence => 0.5, Mistakes => 0.05, Fatigue => 0.002),
+         when 3 => (Pace => 0.006, Aggression => 0.9, Defence => 0.3, Mistakes => 0.30, Fatigue => 0.003),
+         when 4 => (Pace => 0.000, Aggression => 0.4, Defence => 0.95, Mistakes => 0.10, Fatigue => 0.002),
+         when 5 => (Pace => 0.004, Aggression => 0.2, Defence => 0.4, Mistakes => 0.04, Fatigue => 0.008),
+         when 6 => (Pace => -0.004, Aggression => 1.0, Defence => 0.6, Mistakes => 0.45, Fatigue => 0.004),
+         when 7 => (Pace => -0.008, Aggression => 0.5, Defence => 0.5, Mistakes => 0.12, Fatigue => 0.003),
+         when 8 => (Pace => -0.012, Aggression => 0.6, Defence => 0.7, Mistakes => 0.15, Fatigue => 0.005),
+         when others => (Pace => 0.0, Aggression => 0.0, Defence => 0.0, Mistakes => 0.0, Fatigue => 0.0));
+
+   function VSC_On return Boolean is (Time < VSC_Until);
+   function VSC_Pace return Float is (0.6);
+
+   Stopped_T : array (Car_Index) of Float := (others => 0.0);
+   Too_Fast_T : Float := 0.0;
+
+   --  Every twentieth of a second: has someone stopped on the circuit?
+   procedure Watch_Race is
+   begin
+      if Config.Mode /= Race or else not Lights_Out then
+         return;
+      end if;
+      for K in 1 .. Car_Count loop
+         declare
+            L : Lap_Info renames Laps (K);
+         begin
+            if not L.On_Grid and then not L.Finished and then Speed (Cars (K)) < 3.0 then
+               Stopped_T (K) := Stopped_T (K) + 0.05;
+               if Stopped_T (K) > 1.5 then
+                  Yellow_S := Track.Samples (Cars (K).Hint).S;
+                  Yellow_Until := Time + 12.0;
+               end if;
+               if Stopped_T (K) > 5.0 and then not VSC_On then
+                  VSC_Until := Time + 25.0;
+               end if;
+            else
+               Stopped_T (K) := 0.0;
+            end if;
+            if Cars (K).Impact > 16.0 then
+               Yellow_S := Track.Samples (Cars (K).Hint).S;
+               Yellow_Until := Time + 12.0;
+            end if;
+         end;
+      end loop;
+      if Time > Yellow_Until then
+         Yellow_S := -1.0;
+      end if;
+      --  The player under the safety car: too fast for long, five seconds
+      if VSC_On and then not Laps (1).Finished then
+         if Speed (Cars (1)) > VSC_Pace * Track.Samples (Cars (1).Hint).Line_V + 3.0 then
+            Too_Fast_T := Too_Fast_T + 0.05;
+            if Too_Fast_T > 2.0 then
+               Laps (1).Penalty := Laps (1).Penalty + VSC_Penalty;
+               Too_Fast_T := 0.0;
+            end if;
+         else
+            Too_Fast_T := Float'Max (0.0, Too_Fast_T - 0.05);
+         end if;
+      end if;
+   end Watch_Race;
+
    function AI_Drives (I : Car_Index) return Boolean is
-     ((I > 1 and then not (Config.Two_Players and then I = 2))
-      or else Config.Mode = Demo or else Force_AI);
+     (not (Config.Online and then I = 2)
+      and then ((I > 1 and then not (Config.Two_Players and then I = 2))
+                or else Config.Mode = Demo or else Force_AI));
 
    function Save_Name return String is
       Home : constant String :=
@@ -146,6 +212,7 @@ package body Session is
    procedure Drive_AI (I : Car_Index) is
       C : Car renames Cars (I);
       St : AI_State renames AI (I);
+      Ch : constant Character := Character_Of (I);
       V : constant Float := C.Vx;
       Idx : Natural;
       T, D : Float;
@@ -188,6 +255,31 @@ package body Session is
                end;
             end if;
          end loop;
+         --  Defend: a car close behind, a corner coming, cover the inside
+         if Want = 0.0 and then Ch.Defence > 0.0 then
+            for K in 1 .. Car_Count loop
+               if K /= I then
+                  declare
+                     DS0 : constant Float := Track.Samples (Cars (K).Hint).S - Self_S;
+                     DS : constant Float :=
+                       (if DS0 > Track.Length / 2.0 then DS0 - Track.Length
+                        elsif DS0 < -Track.Length / 2.0 then DS0 + Track.Length else DS0);
+                     Bend : constant Float :=
+                       Track.Samples (Track.Next (Idx, Integer (40.0 / Track.Spacing))).Kappa;
+                  begin
+                     if DS < -2.0 and then DS > -18.0 and then Speed (Cars (K)) > Sp - 1.0
+                       and then abs Bend > 1.0 / 250.0
+                     then
+                        Want := (if Bend > 0.0 then 1.0 else -1.0) * 2.4 * Ch.Defence
+                          - (Track.Samples (Idx).Line_D
+                             - (if Bend > 0.0 then Track.Samples (Idx).W_R - 1.6
+                                else -(Track.Samples (Idx).W_L - 1.6)))
+                          * 0.0;
+                     end if;
+                  end;
+               end if;
+            end loop;
+         end if;
          St.Offset := St.Offset + Clamp (Want - St.Offset, -0.03, 0.03);
       end;
 
@@ -237,17 +329,31 @@ package body Session is
                     Float (Cars (K).X - C.X) * Track.Samples (Idx).RX
                     + Float (Cars (K).Z - C.Z) * Track.Samples (Idx).RZ;
                begin
-                  if DS > 0.0 and then DS < 25.0 and then abs Lat < 1.9 then
+                  if DS > 0.0 and then DS < 25.0 and then abs Lat < 1.9 - 0.4 * Ch.Aggression then
                      Slow_Ahead := Float'Min
-                       (Slow_Ahead, Speed (Cars (K)) + Float'Max (0.0, DS - 6.0) * 0.8);
+                       (Slow_Ahead,
+                        Speed (Cars (K)) + Float'Max (0.0, DS - 6.0 + 2.5 * Ch.Aggression) * 0.8);
                   end if;
                end;
             end if;
          end loop;
          declare
             Look : constant Natural := Track.Next (Idx, 1 + Integer (Sp * 0.14));
+            Here_S : constant Float := Track.Samples (Idx).S;
+            Tired : constant Float := 1.0 - Ch.Fatigue * Float (Laps (I).Lap);
+            Rushing : constant Boolean :=
+              St.Rush_Until >= 0.0 and then Here_S < St.Rush_Until
+              and then Here_S > St.Rush_Until - 200.0;
             Target : constant Float := Float'Min
-              (Track.Samples (Look).Line_V * St.Skill, Slow_Ahead);
+              (Track.Samples (Look).Line_V * St.Skill * Tired
+               * (1.0 + 0.012 * Ch.Aggression)
+               * (if Rushing then 1.10 else 1.0)
+               * (if VSC_On then VSC_Pace
+                  elsif Yellow_S >= 0.0
+                    and then (Yellow_S - Here_S >= 0.0 and then Yellow_S - Here_S < 300.0)
+                  then 0.8
+                  else 1.0),
+               Slow_Ahead);
             Err : constant Float := Target - Sp;
          begin
             if not Lights_Out then
@@ -271,6 +377,29 @@ package body Session is
                St.Inputs.Brake := Clamp (-Err * 0.3, 0.0, 1.0);
             end if;
          end;
+      end;
+
+      --  Now and then, at a corner coming up, the dice say: too fast into it
+      declare
+         Here_S : constant Float := Track.Samples (Idx).S;
+         Gone : constant Float :=
+           (if Here_S >= St.Last_Roll then Here_S - St.Last_Roll
+            else Here_S + Track.Length - St.Last_Roll);
+      begin
+         if Lights_Out and then Ch.Mistakes > 0.0 and then Gone > 100.0 then
+            St.Last_Roll := Here_S;
+            declare
+               N : constant Natural := Track.Next_Note (Here_S);
+            begin
+               if N > 0 and then Track.Notes (N).Kind /= Track.Crest
+                 and then Track.Notes (N).S - Here_S < 120.0
+                 and then Ada.Numerics.Float_Random.Random (Dice) < Ch.Mistakes * 0.1
+               then
+                  St.Rush_Until := Track.Notes (N).S + 40.0;
+                  AI_Mistakes := AI_Mistakes + 1;
+               end if;
+            end;
+         end if;
       end;
 
       --  Lost on the grass or against a wall: back on the track
@@ -436,7 +565,7 @@ package body Session is
          L.Lap_Time := 0.0;
          if Config.Mode = Race and then L.Lap >= Config.Laps and then not L.Finished then
             L.Finished := True;
-            L.Finish_Time := Time;
+            L.Finish_Time := Time + L.Penalty;
          end if;
       end if;
       L.Last_S := S;
@@ -507,6 +636,12 @@ package body Session is
       Player_Spec := Tuned (Config.Kind, Config.Tune);
       Service_Left := 0.0;
       Service_Offer := False;
+      In_Pit_Lane := False;
+      Yellow_S := -1.0;
+      Yellow_Until := 0.0;
+      VSC_Until := 0.0;
+      Stopped_T := (others => 0.0);
+      Too_Fast_T := 0.0;
       Parked := 0.0;
       Laps := (others => <>);
       Laps (1).Best_Time := Best_Keep;
@@ -515,7 +650,7 @@ package body Session is
       end if;
       case Config.Mode is
          when Race =>
-            Car_Count := 1 + Config.Opponents;
+            Car_Count := (if Config.Online then 2 else 1 + Config.Opponents);
             Lights := 0;
             Lights_Out := False;
          when Hotlap =>
@@ -549,8 +684,8 @@ package body Session is
             end if;
             Vehicle.Place (Cars (I), Config.Kind, X, Z, H);
             Laps (I).Last_S := Track.Samples (Cars (I).Hint).S;
-            AI (I) := (Skill => Config.AI_Skill
-                         + 0.03 * (Ada.Numerics.Float_Random.Random (Dice) - 0.5),
+            AI (I) := (Skill => Config.AI_Skill + Character_Of (I).Pace
+                         + 0.01 * (Ada.Numerics.Float_Random.Random (Dice) - 0.5),
                        others => <>);
             AI (I).Inputs.Throttle := 0.0;
             if I = 1 and then Config.Assist.Mode = Paddles then
@@ -586,13 +721,21 @@ package body Session is
                                                  when Race_GT3 => 410_000.0,
                                                  when Rally_4WD => 230_000.0,
                                                  when Classic_RWD => 155_000.0,
-                                                 when Hyper_AWD => 510_000.0) / Spec.Mass,
+                                                 when Hyper_AWD => 510_000.0,
+                                                 when Sport_Bike => 150_000.0) / Spec.Mass,
          Drag_Per_V2 => 0.5 * 1.2 * Spec.Cd_A / Spec.Mass,
          Brake_Acc => Spec.Mu * 9.81 * 0.62 * Condition_Grip (Spec)
            * (if Track.Is_Stage then Spec.Loose_Mu * 0.78 else 1.0));
       Load_Best;
       Restart;
    end Start;
+
+   procedure Seed_Dice (Seed : Integer) is
+   begin
+      Ada.Numerics.Float_Random.Reset (Dice, Seed);
+   end Seed_Dice;
+
+   Fall_Time : constant := 3.0;   --  seconds on the ground after a fall
 
    procedure Reset_Player is
       C : Car renames Cars (1);
@@ -677,6 +820,7 @@ package body Session is
          begin
             Track.Locate (Float (C.X), Float (C.Z), Hint, Idx, T, D);
             Service_Offer := Work > 0.0 and then Track.In_Pit_Box (Idx, D);
+            In_Pit_Lane := Track.In_Pit_Lane (Idx, D);
             if Service_Offer and then Speed (C) < 0.8 then
                Parked := Parked + 0.05;
                if Parked >= 1.0 then
@@ -689,17 +833,65 @@ package body Session is
       end if;
    end Pit_Service;
 
+   --  The other machine's car: where it last said, carried on by its speed
+   procedure Follow_Remote (I : Car_Index) is
+      C : Car renames Cars (I);
+      R : Remote_View renames Remote;
+      Ahead : constant Float := Float'Min (R.Age, 0.25);
+      H : constant Float := R.Heading + R.Rate * Ahead;
+      FX : constant Float := Sin (R.Heading);
+      FZ : constant Float := -Cos (R.Heading);
+   begin
+      if not R.Have then
+         return;
+      end if;
+      --  (body axes: forward FX, FZ; to the right Cos, Sin of the heading)
+      C.X := Long_Float (R.X + (R.Vx * FX + R.Vy * Cos (R.Heading)) * Ahead);
+      C.Z := Long_Float (R.Z + (R.Vx * FZ + R.Vy * Sin (R.Heading)) * Ahead);
+      C.Y := R.Y;
+      C.Heading := H;
+      C.Pitch := R.Pitch;
+      C.Roll := R.Roll;
+      C.Vx := R.Vx;
+      C.Vy := R.Vy;
+      C.Rate := R.Rate;
+      C.Steer := R.Steer;
+      C.Rpm := R.Rpm;
+      C.Gear := Integer'Max (-1, Integer'Min (6, R.Gear));
+      for W in Wheel_Id loop
+         C.Wheels (W).Off_Y := Spec.Radius - 0.02;
+         C.Wheels (W).Angle := C.Wheels (W).Angle + R.Vx / Spec.Radius * Dt;
+      end loop;
+      declare
+         Idx : Natural;
+         T, D : Float;
+      begin
+         Track.Locate (Float (C.X), Float (C.Z), C.Hint, Idx, T, D);
+      end;
+      Laps (I).Lap := R.Lap;
+      Laps (I).Lap_Time := R.Lap_Time;
+      Laps (I).S := R.S;
+      Laps (I).Last_S := R.Last_S;
+      Laps (I).Finished := R.Finished;
+      Laps (I).Finish_Time := R.Finish_Time;
+      Laps (I).On_Grid := R.On_Grid;
+   end Follow_Remote;
+
    procedure Step (Player : Vehicle.Inputs) is
-      Ai_Assists : constant Assists := (Abs_On => True, Tc_On => True, Mode => Automatic, others => <>);
+      Ai_Assists : constant Assists :=
+        (Abs_On => True, Tc_On => True, Mode => Automatic, Stunt => Stunt_Riders, others => <>);
       --  (Car 1 in the menu's demo keeps its wear switches, for the tests)
       Demo_Assists : constant Assists :=
         (Abs_On => True, Tc_On => True, Mode => Automatic,
          Wear_Rate => Config.Assist.Wear_Rate, Fuel_Use => Config.Assist.Fuel_Use,
-         Damage => Config.Assist.Damage);
+         Damage => Config.Assist.Damage, Stunt => Stunt_Riders);
       Hands : Vehicle.Inputs := Player;
    begin
       Tick := Tick + 1;
-      Time := Time + Dt;
+      --  Online: the lights wait for the other machine
+      if not (Config.Online and then not Online_Ready) then
+         Time := Time + Dt;
+      end if;
 
       --  Start lights: one red a second, then out at a moment not quite known
       if not Lights_Out then
@@ -723,7 +915,9 @@ package body Session is
       end if;
 
       for I in 1 .. Car_Count loop
-         if AI_Drives (I) then
+         if Config.Online and then I = 2 then
+            Follow_Remote (I);
+         elsif AI_Drives (I) then
             if I = 1 then
                Vehicle.Step (Cars (I), Player_Spec, AI (I).Inputs, Demo_Assists);
             else
@@ -734,15 +928,28 @@ package body Session is
             if Config.Mode = Stage and then Laps (1).Finished then
                Hands.Throttle := 0.0;
                Hands.Brake := Float'Max (Hands.Brake, 0.5);
-            elsif Config.Mode = Stage and then not Lights_Out then
+            elsif (Config.Mode = Stage or else Config.Online) and then not Lights_Out then
                Hands.Brake := Float'Max (Hands.Brake, 0.2);   --  on the line, held
                Hands.Throttle := 0.0;
             end if;
             if I = 1 then
                Pit_Service (Hands);
+               --  The limiter in the pit lane
+               if In_Pit_Lane and then Speed (Cars (1)) > Track.Pit_Limit then
+                  Hands.Throttle := 0.0;
+                  if Speed (Cars (1)) > Track.Pit_Limit + 1.0 then
+                     Hands.Brake := Float'Max
+                       (Hands.Brake, Float'Min (0.8, (Speed (Cars (1)) - Track.Pit_Limit) * 0.15));
+                  end if;
+               end if;
             end if;
             if I = 1 then
-               Vehicle.Step (Cars (I), Player_Spec, Hands, Config.Assist);
+               declare
+                  Aids : Assists := Config.Assist;
+               begin
+                  Aids.Stunt := Stunt_Riders and then Force_AI;
+                  Vehicle.Step (Cars (I), Player_Spec, Hands, Aids);
+               end;
             else
                --  The second player: on the keys, so the gearbox shifts itself
                Vehicle.Step (Cars (I), Player_Spec, Second_Hands,
@@ -750,7 +957,22 @@ package body Session is
                               Mode => Automatic, Damage => Config.Assist.Damage, others => <>));
             end if;
          end if;
-         Update_Lap (I);
+         --  A rider down gets up after a while, back on the road
+         if Cars (I).Fallen_T > Fall_Time and then I <= (if Config.Two_Players then 2 else 1) then
+            if I = 1 then
+               Reset_Player;
+            else
+               declare
+                  S : Track.Sample renames Track.Samples (Cars (I).Hint);
+               begin
+                  Vehicle.Place (Cars (I), Config.Kind, S.X + S.RX * S.Line_D, S.Z + S.RZ * S.Line_D,
+                                 Arctan (S.TX, -S.TZ));
+               end;
+            end if;
+         end if;
+         if not (Config.Online and then I = 2) then
+            Update_Lap (I);
+         end if;
       end loop;
 
       if Car_Count > 1 and then Tick mod 2 = 0 then
@@ -762,6 +984,7 @@ package body Session is
       end if;
 
       if Tick mod 50 = 0 then
+         Watch_Race;
          Update_Order;
          if Config.Mode in Race | Stage and then Laps (1).Finished then
             Race_Over := True;

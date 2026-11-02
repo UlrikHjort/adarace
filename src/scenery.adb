@@ -574,7 +574,7 @@ package body Scenery is
             J : constant Natural := Track.Next (I);
             N : Track.Sample renames Track.Samples (J);
          begin
-            if A.S >= Track.Pit_From and then A.S < Track.Pit_To then
+            if Track.In_Pit_Lane (I, -(A.W_L + A.Kerb_L + 1.0)) then
                declare
                   function Spot (P : Track.Sample; Out_D, Lift : Float) return Vec3 is
                     (P.X - P.RX * (P.W_L + P.Kerb_L + Out_D),
@@ -589,12 +589,25 @@ package body Scenery is
                   Add (B, (Spot (A, 0.0, 0.03), Up, 0.0, 9.0, 9.0, Asphalt, A.S, 0.0));
                   Add (B, (Spot (N, Track.Pit_Wide, 0.03), Up, 0.0, 9.0, 9.0, Asphalt, N.S, 5.5));
                   Add (B, (Spot (A, Track.Pit_Wide, 0.03), Up, 0.0, 9.0, 9.0, Asphalt, A.S, 5.5));
-                  --  Yellow lines round it, and across every car's length
-                  Quad (B, Spot (A, Track.Pit_Wide - 0.25, 0.04), Spot (N, Track.Pit_Wide - 0.25, 0.04),
-                        Spot (N, Track.Pit_Wide - 0.05, 0.04), Spot (A, Track.Pit_Wide - 0.05, 0.04), Line);
+                  --  A white line between the lane and the track
+                  Quad (B, Spot (A, 0.1, 0.04), Spot (N, 0.1, 0.04),
+                        Spot (N, 0.35, 0.04), Spot (A, 0.35, 0.04), (0.62, 0.62, 0.6));
+               end;
+            end if;
+            if A.S >= Track.Pit_From and then A.S < Track.Pit_To then
+               declare
+                  function Spot (P : Track.Sample; Out_D, Lift : Float) return Vec3 is
+                    (P.X - P.RX * (P.W_L + P.Kerb_L + Out_D),
+                     P.Y - P.W_L * P.Bank + Lift,
+                     P.Z - P.RZ * (P.W_L + P.Kerb_L + Out_D));
+                  Line : constant Color := (0.62, 0.60, 0.20);
+               begin
+                  --  The box: yellow lines round it, and across every car's length
+                  Quad (B, Spot (A, Track.Pit_Wide - 0.25, 0.045), Spot (N, Track.Pit_Wide - 0.25, 0.045),
+                        Spot (N, Track.Pit_Wide - 0.05, 0.045), Spot (A, Track.Pit_Wide - 0.05, 0.045), Line);
                   if (I mod 5) = 0 then
-                     Quad (B, Spot (A, 0.05, 0.04), Spot (N, 0.05, 0.04) ,
-                           Spot (N, Track.Pit_Wide, 0.04), Spot (A, Track.Pit_Wide, 0.04), Line);
+                     Quad (B, Spot (A, 0.4, 0.045), Spot (N, 0.4, 0.045),
+                           Spot (N, Track.Pit_Wide, 0.045), Spot (A, Track.Pit_Wide, 0.045), Line);
                   end if;
                end;
             end if;

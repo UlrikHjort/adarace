@@ -73,8 +73,17 @@ pick rally   && clip rally 22 5 $STAGE ADARACE_CAMERA=CHASE
 pick night   && clip night 30 5 $STAGE ADARACE_CAMERA=CHASE ADARACE_TIME=6
 pick winter  && clip winter 30 5 $STAGE ADARACE_CAMERA=CHASE ADARACE_SEASON=2 ADARACE_WEATHER=3
 pick rain    && clip rain 14 5 ADARACE_TRACK=1 ADARACE_CAMERA=COCKPIT ADARACE_WEATHER=1
-pick race    && clip race 8 6 ADARACE_MODE=1 ADARACE_TRACK=1 ADARACE_CAR=1 ADARACE_CAMERA=CHASE ADARACE_TIME=2
+pick race    && clip race 8 6 ADARACE_MODE=1 ADARACE_TRACK=7 ADARACE_CAR=1 ADARACE_CAMERA=CHASE ADARACE_TIME=6
 pick school  && clip school 18 5 ADARACE_MODE=2 ADARACE_LESSON=1 ADARACE_CAMERA=CHASE
+
+# The motorcycle is car 5; a show rider (wheelies), the camera swung round to its side
+BIKE="ADARACE_CAR=5 ADARACE_STUNT=1"
+# shellcheck disable=SC2086
+pick bike-wheelie && clip bike-wheelie 6 5 $BIKE ADARACE_TRACK=1 ADARACE_CAMERA=CHASE ADARACE_ORBIT=75.0
+# shellcheck disable=SC2086
+pick bike-lean    && clip bike-lean 17 5 $BIKE ADARACE_TRACK=2 ADARACE_CAMERA=CHASE ADARACE_TIME=2
+# shellcheck disable=SC2086
+pick bike-helmet  && clip bike-helmet 18 5 $BIKE ADARACE_TRACK=7 ADARACE_CAMERA=COCKPIT ADARACE_TIME=6
 
 pick shots && {
     shot rally-forest 1500 $STAGE ADARACE_CAMERA=CHASE
@@ -86,6 +95,8 @@ pick shots && {
     shot gt3-golden 1300 ADARACE_TRACK=2 ADARACE_CAR=1 ADARACE_CAMERA=TRACKSIDE ADARACE_TIME=2
     shot driving-line 2000 ADARACE_TRACK=2 ADARACE_AID=2 ADARACE_CAMERA=CHASE
     shot lesson-passed 3500 ADARACE_MODE=2 ADARACE_LESSON=0 ADARACE_CAMERA=CHASE
+    shot boulevard 2500 ADARACE_TRACK=8 ADARACE_CAR=4 ADARACE_CAMERA=CHASE ADARACE_TIME=5
+    shot split-screen 1300 ADARACE_MODE=5 ADARACE_TRACK=7 ADARACE_CAR=1 ADARACE_CAMERA=CHASE ADARACE_TIME=2
 }
 
 pick menu && {

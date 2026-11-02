@@ -17,6 +17,7 @@ package Renderer is
       Camera   : Camera_Kind := Cockpit;
       Fov      : Float := 55.0;     --  degrees, vertical
       Look     : Float := 0.0;      --  radians, sideways from the cockpit
+      Orbit    : Float := 0.0;      --  radians round the car, the chase camera (videos)
       Mirror   : Boolean := True;
       Day      : Time_Of_Day := Noon;
       Ghost    : Boolean := True;

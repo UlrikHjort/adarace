@@ -1,3 +1,6 @@
+--  AdaRace: a driving simulator in Ada
+--  Copyright (c) 2026 Ulrik Hørlyk Hjort
+--  SPDX-License-Identifier: MIT
 --  Reads the wheel for some seconds and prints what it says.  No force is
 --  ever applied: safe to run with nobody holding the wheel.
 with Ada.Text_IO; use Ada.Text_IO;

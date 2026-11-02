@@ -275,10 +275,16 @@ package body Hud is
             Pedal (0, F.Clutch, 0.3, 0.6, 1.0);
             Pedal (1, F.Brake, 1.0, 0.18, 0.12);
             Pedal (2, F.Throttle, 0.3, 0.95, 0.4);
-            Tyre (TX, PY + 12.0 * S, F.Temps (1), F.Slides (1), F.Wear (1));
-            Tyre (TX + 28.0 * S, PY + 12.0 * S, F.Temps (2), F.Slides (2), F.Wear (2));
-            Tyre (TX, PY + 64.0 * S, F.Temps (3), F.Slides (3), F.Wear (3));
-            Tyre (TX + 28.0 * S, PY + 64.0 * S, F.Temps (4), F.Slides (4), F.Wear (4));
+            if Vehicle.Is_Bike (Session.Config.Kind) then
+               --  A motorcycle: the front tyre above the rear
+               Tyre (TX + 14.0 * S, PY + 12.0 * S, F.Temps (1), F.Slides (1), F.Wear (1));
+               Tyre (TX + 14.0 * S, PY + 64.0 * S, F.Temps (3), F.Slides (3), F.Wear (3));
+            else
+               Tyre (TX, PY + 12.0 * S, F.Temps (1), F.Slides (1), F.Wear (1));
+               Tyre (TX + 28.0 * S, PY + 12.0 * S, F.Temps (2), F.Slides (2), F.Wear (2));
+               Tyre (TX, PY + 64.0 * S, F.Temps (3), F.Slides (3), F.Wear (3));
+               Tyre (TX + 28.0 * S, PY + 64.0 * S, F.Temps (4), F.Slides (4), F.Wear (4));
+            end if;
          end;
 
          --  Fuel and what is broken, over the tyres ---------------------------
@@ -432,7 +438,7 @@ package body Hud is
                            Color (0.85, 0.85, 0.88);
                         end if;
                         Text (Trim (P'Image) & "  "
-                              & Championship.Driver_Name (I)
+                              & (if Session.Config.Online and then I = 2 then "OTHER" else Championship.Driver_Name (I))
                               & "  L" & Trim (Natural'Image (F.Laps (I).Lap + 1)),
                               X + 12.0 * S, Y0 + 24.0 * S + 24.0 * S * Float (P), 15.0 * S);
                      end if;
@@ -756,6 +762,42 @@ package body Hud is
             Text ("Resets" & Natural'Image (L1.Resets) & "   Esc for the menu",
                   Cx, PY + 136.0 * S, 14.0 * S, 0.5);
          end;
+      end if;
+
+      --  Flags, the safety car, the pit lane: a band across the top
+      if F.Waiting_For_Peer then
+         Color (0.1, 0.25, 0.7, 0.85);
+         Rect (Cx - 300.0 * S, 84.0 * S, 600.0 * S, 40.0 * S);
+         Color (1.0, 1.0, 1.0);
+         Text ("WAITING FOR THE OTHER DRIVER", Cx, 112.0 * S, 22.0 * S, 0.5);
+      elsif F.VSC_Left > 0.0 or else F.Yellow_Ahead or else F.In_Pit_Lane then
+         declare
+            Line : constant String :=
+              (if F.VSC_Left > 0.0 then
+                 (if F.VSC_Left < 4.0 then "VIRTUAL SAFETY CAR ENDING"
+                  else "VIRTUAL SAFETY CAR: SLOW DOWN, NO OVERTAKING")
+               elsif F.In_Pit_Lane then "PIT LANE  60 km/h"
+               else "YELLOW FLAG AHEAD");
+            Sz : constant Float := 22.0 * S;
+            MW : constant Float := Float (Line'Length) * Sz * Mono_Ratio + 40.0 * S;
+            BY : constant Float := 84.0 * S;
+         begin
+            if F.In_Pit_Lane and then F.VSC_Left = 0.0 then
+               Color (0.1, 0.25, 0.7, 0.85);
+            else
+               Color (0.95, 0.75, 0.05, 0.9);
+            end if;
+            Rect (Cx - MW / 2.0, BY, MW, 40.0 * S);
+            Color (0.05, 0.05, 0.05);
+            if F.In_Pit_Lane and then F.VSC_Left = 0.0 then
+               Color (1.0, 1.0, 1.0);
+            end if;
+            Text (Line, Cx, BY + 28.0 * S, Sz, 0.5);
+         end;
+      end if;
+      if F.Penalty > 0.0 and then Session.Config.Mode = Session.Race then
+         Color (1.0, 0.35, 0.2);
+         Text ("PENALTY +" & Trim (Natural'Image (Natural (F.Penalty))) & " s", W - 30.0 * S, H * 0.36, 18.0 * S, 1.0);
       end if;
 
       if F.Service_Left > 0.0 or else F.Service_Offer

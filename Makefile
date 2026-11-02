@@ -1,4 +1,6 @@
 # AdaRace: a driving simulator in Ada
+# Copyright (c) 2026 Ulrik Hørlyk Hjort
+# SPDX-License-Identifier: MIT
 #
 #   make         build the game
 #   make run     build and start it
@@ -37,9 +39,14 @@ wheel:
 	gprbuild -p -P wheelprobe.gpr
 	./bin/wheelprobe
 
+pad:
+	gprbuild -p -P padprobe.gpr
+	./bin/padprobe
+
 clean:
 	gprclean -q -P adarace.gpr
 	gprclean -q -P simtest.gpr
 	gprclean -q -P wheelprobe.gpr
+	gprclean -q -P padprobe.gpr
 
-.PHONY: all check game run demo dist voice test wheel clean
+.PHONY: all check game run demo dist voice test wheel pad clean

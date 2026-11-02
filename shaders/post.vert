@@ -1,4 +1,7 @@
 #version 450 core
+// AdaRace: a driving simulator in Ada
+// Copyright (c) 2026 Ulrik Hørlyk Hjort
+// SPDX-License-Identifier: MIT
 out vec2 vUV;
 uniform vec4 uRect;   // where on the screen, in 0 .. 1 (x, y, width, height)
 uniform float uFlip;

@@ -1,3 +1,6 @@
+--  AdaRace: a driving simulator in Ada
+--  Copyright (c) 2026 Ulrik Hørlyk Hjort
+--  SPDX-License-Identifier: MIT
 with Ada.Text_IO; use Ada.Text_IO;
 with Ada.Command_Line;
 with Session; with Track; with Vehicle; use Vehicle;

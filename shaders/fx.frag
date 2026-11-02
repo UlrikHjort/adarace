@@ -1,4 +1,7 @@
 #version 450 core
+// AdaRace: a driving simulator in Ada
+// Copyright (c) 2026 Ulrik Hørlyk Hjort
+// SPDX-License-Identifier: MIT
 in vec4 vColor;
 uniform float uPoints;
 out vec4 fragColor;

@@ -15,6 +15,7 @@ with Ada.Text_IO;
 
 with Championship;
 with Codriver;
+with Net;
 with Rally;
 with School;
 with Session;
@@ -257,6 +258,118 @@ procedure Simtest is
    end Straight;
 
    ---------------------------------------------------------------------------
+   --  The motorcycle: it leans to turn, and falls when asked too much
+
+   procedure Motorcycle is
+      K : constant Car_Kind := Sport_Bike;
+      S : constant Spec := Spec_Of (K);
+      A : constant Assists := (Abs_On => True, Tc_On => True, Mode => Automatic, others => <>);
+      Raw : constant Assists := (Abs_On => False, Tc_On => False, Mode => Automatic, others => <>);
+      C : Car;
+      N : Vehicle.Inputs;
+      Home_X, Home_Z : Long_Float := 0.0;
+
+      --  A step, kept on the same spot of asphalt: only the motion matters
+      procedure Ride (With_Assists : Assists) is
+      begin
+         Vehicle.Step (C, S, N, With_Assists);
+         C.X := Home_X;
+         C.Z := Home_Z;
+      end Ride;
+
+      --  On the speedway's start, rolling at a speed, in a sensible gear
+      procedure Fresh (Kmh : Float) is
+         A0 : Track.Sample renames Track.Samples (0);
+      begin
+         Vehicle.Place (C, K, A0.X, A0.Z, Arctan (A0.TX, -A0.TZ));
+         C.Vx := Kmh / 3.6;
+         C.Gear := Integer'Max (1, Integer'Min (6, Integer (Kmh / 40.0)));
+         N := (others => <>);
+         Home_X := C.X;
+         Home_Z := C.Z;
+      end Fresh;
+   begin
+      Track.Load (1);
+      Session.Start (Hotlap (K));
+
+      --  A steady turn: the lean the physics asks for, tan(lean) = v^2 / (g R)
+      Fresh (60.0);
+      N.Steer := 0.06;
+      N.Throttle := 0.25;
+      for I in 1 .. 4000 loop
+         Ride (A);
+      end loop;
+      declare
+         V : constant Float := C.Vx;
+         Radius : constant Float := V / Float'Max (0.001, abs C.Rate);
+         Want : constant Float := Arctan (V * V / (9.81 * Radius));
+      begin
+         Put_Line ("  bike at " & Img (V * 3.6, 0) & " km/h on a " & Img (Radius, 0)
+                   & " m radius leans " & Img (abs C.Roll * 57.3, 1) & " deg (physics: "
+                   & Img (Want * 57.3, 1) & ")");
+         Check (abs (abs C.Roll - Want) < 0.03 and then C.Fallen_T = 0.0,
+                "a motorcycle leans into a turn as far as the turn needs");
+         Check (C.Roll < 0.0 and then C.Rate > 0.0,
+                "turning right, it leans to the right");
+      end;
+
+      --  Grabbing the front brake hard at full lean, without ABS: down it goes
+      Fresh (90.0);
+      N.Steer := 1.0;
+      for I in 1 .. 2500 loop
+         Ride (Raw);
+      end loop;
+      Put_Line ("  full lean at " & Img (C.Vx * 3.6, 0) & " km/h: " & Img (abs C.Roll * 57.3, 1) & " deg");
+      Check (C.Fallen_T = 0.0 and then abs C.Roll > 0.6,
+             "it holds a full lean on a steady throttle");
+      N.Brake := 1.0;
+      for I in 1 .. 1500 loop
+         Ride (Raw);
+      end loop;
+      Check (C.Fallen_T > 0.0, "a hard brake at full lean without ABS throws it down");
+
+      --  Full throttle in first without the anti-wheelie: the front comes up
+      Fresh (90.0);
+      C.Gear := 1;
+      N.Throttle := 1.0;
+      declare
+         Most : Float := 0.0;
+      begin
+         for I in 1 .. 600 loop
+            Ride (Raw);
+            Most := Float'Max (Most, C.Pitch);
+         end loop;
+         Put_Line ("  wheelie: " & Img (Most * 57.3, 1) & " deg");
+         Check (Most > 0.08, "full power in first lifts the front wheel");
+         Fresh (90.0);
+         C.Gear := 1;
+         N.Throttle := 1.0;
+         Most := 0.0;
+         for I in 1 .. 600 loop
+            Ride (A);
+            Most := Float'Max (Most, C.Pitch);
+         end loop;
+         Check (Most < 0.08, "the anti-wheelie keeps it down: " & Img (Most * 57.3, 1) & " deg");
+      end;
+
+      --  In a session: down, and back on the road a few seconds later
+      Session.Start (Hotlap (K));
+      Session.Cars (1).Vx := 20.0;
+      Session.Cars (1).Fallen_T := 0.001;
+      declare
+         Was_Down : Boolean := False;
+      begin
+         for I in 1 .. 6000 loop
+            Session.Step ((others => <>));
+            Was_Down := Was_Down or else Session.Cars (1).Fallen_T > 2.0;
+         end loop;
+         Check (Was_Down and then Session.Cars (1).Fallen_T = 0.0
+                and then abs Session.Cars (1).Roll < 0.1,
+                "a fallen rider is picked up and put back on the road");
+      end;
+   end Motorcycle;
+
+   ---------------------------------------------------------------------------
 
    function Saved_By_Demo return Boolean is
      (Ada.Directories.Exists (Session.Save_Name));
@@ -266,8 +379,8 @@ procedure Simtest is
       N : Vehicle.Inputs;
       Max_Lat, Max_V : Float := 0.0;
       Max_Temp : Float := 0.0;
-      Off_Count, Hits : Natural := 0;
-      Was_Off : Boolean := False;
+      Off_Count, Hits, Falls : Natural := 0;
+      Was_Off, Was_Down : Boolean := False;
       Laps_Done : Natural := 0;
    begin
       S.Mode := Session.Demo;
@@ -298,6 +411,12 @@ procedure Simtest is
                if C.Impact > 1.0 then
                   Hits := Hits + 1;
                end if;
+               if C.Fallen_T > 0.0 and then not Was_Down then
+                  Falls := Falls + 1;
+                  Put_Line ("    fell at s=" & Img (Track.Samples (C.Hint).S, 0) & " v="
+                            & Img (C.Vx * 3.6, 0) & " lean=" & Img (C.Roll * 57.3, 0));
+               end if;
+               Was_Down := C.Fallen_T > 0.0;
             end if;
             Was_Off := Off;
          end;
@@ -313,6 +432,9 @@ procedure Simtest is
              "laps by the AI are not saved as records");
       Check (Off_Count = 0, "the AI stays on the circuit");
       Check (Hits < 50, "the AI keeps off the barriers");
+      if Is_Bike (K) then
+         Check (Falls = 0, "the AI rider stays on");
+      end if;
    end AI_Lap;
 
    --  What the player's hands and feet do
@@ -1115,7 +1237,8 @@ procedure Simtest is
             declare
                S : Track.Sample renames Track.Samples (I);
             begin
-               if S.S > Track.Pit_To + 30.0 then
+               --  (but for the pit lane, where the left wall stands beyond it)
+               if not Track.In_Pit_Lane (I, -(S.W_L + S.Kerb_L + 1.0)) and then S.S > Track.Pit_To + 30.0 then
                   Close := Close and then S.Wall_L - S.W_L < 4.0 and then S.Wall_R - S.W_R < 4.0;
                end if;
             end;
@@ -1266,10 +1389,174 @@ procedure Simtest is
       for I in 1 .. 4000 loop
          Session.Step (N);
       end loop;
-      Check (Speed (Session.Cars (2)) > 10.0, "on the second player's throttle it goes:"
+      --  (with rivals round it at the start, it need not get far)
+      Check (Speed (Session.Cars (2)) > 6.0, "on the second player's throttle it goes:"
              & Img (Speed (Session.Cars (2)) * 3.6, 0) & " km/h");
       Session.Second_Hands := (others => <>);
    end Two_Up;
+
+   --  Rivals with a character: some overcook a corner now and then, the order
+   --  changes, and every one of them still finishes
+   procedure Characters is
+      R : Session.Settings := Hotlap (Race_GT3);
+      N : Vehicle.Inputs;
+      Changes : Natural := 0;
+      Before : array (Session.Car_Index) of Natural := (others => 0);
+   begin
+      Track.Load (2);
+      R.Mode := Session.Race;
+      R.Opponents := 7;
+      R.Laps := 3;
+      R.AI_Skill := 0.93;
+      Session.Force_AI := True;
+      Session.AI_Mistakes := 0;
+      Session.Seed_Dice (2026);
+      Session.Start (R);
+      for I in 1 .. 900_000 loop
+         Session.Step (N);
+         if I mod 500 = 0 then
+            for K in 2 .. Session.Car_Count loop
+               if Before (K) /= 0 and then Session.Laps (K).Position /= Before (K) then
+                  Changes := Changes + 1;
+               end if;
+               Before (K) := Session.Laps (K).Position;
+            end loop;
+         end if;
+         exit when (for all K in 1 .. Session.Car_Count => Session.Laps (K).Finished);
+      end loop;
+      Session.Force_AI := False;
+      Put_Line ("    mistakes" & Session.AI_Mistakes'Image & ", changes of place" & Changes'Image);
+      Check ((for all K in 1 .. Session.Car_Count => Session.Laps (K).Finished),
+             "eight cars with characters all finish");
+      Check (Session.AI_Mistakes > 0, "someone overcooks a corner");
+      Check (Changes > 4, "and places change in the race");
+      Check (Session.Character_Of (6).Aggression > Session.Character_Of (2).Aggression
+             and then Session.Character_Of (4).Defence > 0.9,
+             "the rivals differ");
+   end Characters;
+
+   --  The pit lane's limiter, and the virtual safety car for a stopped car
+   procedure Flags is
+      R : Session.Settings := Hotlap (Race_GT3);
+      N : Vehicle.Inputs;
+   begin
+      Track.Load (1);
+      R.Mode := Session.Race;
+      R.Opponents := 4;
+      R.Laps := 3;
+      Session.Start (R);
+      --  Into the lane at speed: the limiter holds it
+      declare
+         C : Car renames Session.Cars (1);
+         I : constant Natural := Track.Next (0, -40);
+         P : Track.Sample renames Track.Samples (I);
+         D : constant Float := P.W_L + 2.5;
+         Top : Float := 0.0;
+      begin
+         Place (C, Race_GT3, P.X - P.RX * D, P.Z - P.RZ * D, Arctan (P.TX, -P.TZ));
+         C.Vx := 30.0;
+         for W in Wheel_Id loop
+            C.Wheels (W).Omega := C.Vx / Session.Player_Spec.Radius;
+         end loop;
+         N.Throttle := 1.0;
+         for K in 1 .. 4000 loop
+            Session.Step (N);
+            if K > 2500 then
+               Top := Float'Max (Top, Speed (C));
+            end if;
+         end loop;
+         Check (Session.In_Pit_Lane and then Top < Track.Pit_Limit + 1.5,
+                "the limiter holds the pit lane to 60 km/h:" & Img (Top * 3.6, 0) & " km/h");
+      end;
+      N := (others => <>);
+      --  A rival stops on the track: a yellow flag, then the safety car
+      Session.Start (R);
+      Session.Force_AI := True;
+      for K in 1 .. 25_000 loop
+         Session.Step (N);
+      end loop;
+      declare
+         Stuck : Car renames Session.Cars (5);
+         Before, During : Float := 0.0;
+      begin
+         for K in 2 .. 4 loop
+            Before := Before + Speed (Session.Cars (K));
+         end loop;
+         for K in 1 .. 9000 loop
+            Stuck.Vx := 0.0;
+            Stuck.Vy := 0.0;
+            for W in Wheel_Id loop
+               Stuck.Wheels (W).Omega := 0.0;
+            end loop;
+            Session.Step (N);
+         end loop;
+         Check (Session.VSC_On, "a car stopped on the circuit brings out the safety car");
+         for K in 2 .. 4 loop
+            During := During + Speed (Session.Cars (K));
+         end loop;
+         Put_Line ("    three rivals' speed: before" & Img (Before * 3.6, 0) & ", under the safety car"
+                   & Img (During * 3.6, 0) & " km/h");
+         Check (During < Before * 0.85, "and everyone slows");
+         --  The player, going on as before: a penalty
+         Session.Force_AI := False;
+         N.Throttle := 1.0;
+         for K in 1 .. 6000 loop
+            Session.Step (N);
+         end loop;
+         Check (Session.Laps (1).Penalty >= Session.VSC_Penalty or else Speed (Session.Cars (1)) < 20.0,
+                "too fast under it costs five seconds:" & Img (Session.Laps (1).Penalty, 0) & " s");
+         N := (others => <>);
+         Session.Force_AI := True;
+         for K in 1 .. 40_000 loop
+            Session.Step (N);
+         end loop;
+         Check (not Session.VSC_On, "and it ends, the car moving again");
+      end;
+      Session.Force_AI := False;
+   end Flags;
+
+   --  The network's words: a car's state goes out and comes back the same
+   procedure Wire is
+      A : constant Net.Car_State :=
+        (X => 123.25, Z => -456.5, Y => 7.75, Heading => 1.5, Pitch => 0.01, Roll => -0.02,
+         Vx => 55.5, Vy => -0.5, Rate => 0.1, Steer => -0.2, Rpm => 6543.0, Gear => 4,
+         Lap => 2, Lap_Time => 61.5, S => 1234.5, Last_S => 1230.0, Finish_Time => 0.0,
+         Finished => False, On_Grid => False);
+      B : Net.Car_State;
+      Good : Boolean;
+   begin
+      Net.Decode (Net.Encode (A), B, Good);
+      Check (Good and then abs (B.X - A.X) < 0.01 and then abs (B.Z - A.Z) < 0.01
+             and then B.Gear = 4 and then B.Lap = 2 and then abs (B.S - A.S) < 0.01
+             and then not B.On_Grid,
+             "a car's state crosses the network whole");
+      Net.Decode ("ADARACE1 STATE 1 2 3", B, Good);
+      Check (not Good, "a short message is refused");
+      Net.Decode ("SOMETHING ELSE ENTIRELY", B, Good);
+      Check (not Good, "and a stranger's");
+      --  The other machine's car in the session: not the AI's, put where it says
+      declare
+         R : Session.Settings := Hotlap (Race_GT3);
+         N : Vehicle.Inputs;
+      begin
+         Track.Load (1);
+         R.Mode := Session.Race;
+         R.Online := True;
+         Session.Start (R);
+         Check (Session.Car_Count = 2 and then not Session.AI_Drives (2), "online: two cars, the other not the AI's");
+         Session.Online_Ready := False;
+         for I in 1 .. 3000 loop
+            Session.Step (N);
+         end loop;
+         Check (not Session.Lights_Out and then Session.Time = 0.0, "the lights wait for the other machine");
+         Session.Remote := (X => Track.Samples (100).X, Z => Track.Samples (100).Z, Y => 20.0,
+                            Vx => 30.0, Have => True, Age => 0.0, Lap => 1, others => <>);
+         Session.Online_Ready := True;
+         Session.Step (N);
+         Check (abs (Float (Session.Cars (2).X) - Track.Samples (100).X) < 1.0
+                and then Session.Laps (2).Lap = 1, "the other car is where it said, on its lap");
+      end;
+   end Wire;
 
    --  A rally from end to end, the AI driving, damage going along
    procedure Rally_Event is
@@ -1476,12 +1763,13 @@ procedure Simtest is
                declare
                   P : Track.Sample renames Track.Samples (I);
                begin
-                  if P.S in Track.Pit_From .. Track.Pit_To then
+                  if Track.In_Pit_Lane (I, -(P.W_L + P.Kerb_L + 1.0)) then
                      Clear := Clear and then P.W_L + P.Kerb_L + Track.Pit_Wide < P.Wall_L - 0.5;
                   end if;
                end;
             end loop;
-            Check (Clear, "the pit box fits at " & Track.Name (T));
+            Check (Clear and then (Track.Is_Stage or else Track.In_Pit_Lane (0, -(Track.Samples (0).W_L + 2.0))),
+                   "the pit lane fits at " & Track.Name (T));
          end;
       end loop;
       Track.Load (Track.Track_Id'First);
@@ -1620,6 +1908,17 @@ begin
    if Ada.Directories.Exists (Ada.Environment_Variables.Value ("HOME")) then
       Ada.Directories.Delete_Tree (Ada.Environment_Variables.Value ("HOME"));
    end if;
+   --  ADARACE_ONLY=bike: just the motorcycle, while tuning it
+   if Ada.Environment_Variables.Value ("ADARACE_ONLY", "") = "bike" then
+      Straight (Sport_Bike);
+      Motorcycle;
+      Wear_And_Fuel (Sport_Bike);
+      for T in 1 .. Track.Track_Count loop
+         AI_Lap (T, Sport_Bike);
+      end loop;
+      Put_Line (if Failed = 0 then "All passed" else Failed'Image & " FAILED");
+      return;
+   end if;
    for T in 1 .. Track.Track_Count loop
       Track_Shape (T);
    end loop;
@@ -1627,6 +1926,7 @@ begin
    for K in Car_Kind loop
       Straight (K);
    end loop;
+   Motorcycle;
    for T in 1 .. Track.Track_Count loop
       for K in Car_Kind loop
          AI_Lap (T, K);
@@ -1649,6 +1949,9 @@ begin
    Rally_Event;
    Season;
    Two_Up;
+   Characters;
+   Flags;
+   Wire;
    Spoken_Notes;
    Conditions;
    Lessons;

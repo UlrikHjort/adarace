@@ -162,6 +162,14 @@ package Track is
    Pit_Wide : constant := 5.5;     --  metres out from the road's edge
 
    function In_Pit_Box (Index : Natural; D : Float) return Boolean;
+
+   --  The pit lane: along the left from this far before the line to this far
+   --  after it, the box in the middle of it; 60 km/h in it
+   Pit_Lane_In  : constant := 160.0;
+   Pit_Lane_Out : constant := 180.0;
+   Pit_Limit    : constant := 60.0 / 3.6;
+
+   function In_Pit_Lane (Index : Natural; D : Float) return Boolean;
    --  Index along the circuit, D across it
 
    Shoulder : constant := 12.0;   --  metres between road edge and open terrain

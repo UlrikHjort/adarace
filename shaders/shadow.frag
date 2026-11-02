@@ -1,4 +1,7 @@
 #version 450 core
+// AdaRace: a driving simulator in Ada
+// Copyright (c) 2026 Ulrik Hørlyk Hjort
+// SPDX-License-Identifier: MIT
 flat in float vMat;
 in vec2 vUV;
 uniform sampler2D uLeaves;

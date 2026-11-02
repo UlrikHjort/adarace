@@ -26,7 +26,8 @@ package body Vehicle is
          when Race_GT3 => "Nordic GT3 (slicks, wings)",
          when Rally_4WD => "Nordic R4 (rally, four wheel drive)",
          when Classic_RWD => "Nordic 1600 (light classic, rear drive)",
-         when Hyper_AWD => "Nordic Hyper (mid-engined, 540 kW)");
+         when Hyper_AWD => "Nordic Hyper (mid-engined, 540 kW)",
+         when Sport_Bike => "Nordic 1000 R (motorcycle)");
 
    function Spec_Of (K : Car_Kind) return Spec is
      (case K is
@@ -38,7 +39,7 @@ package body Vehicle is
             Radius => 0.335, Wheel_I => 1.25,
             Mu => 1.12, Load_Sens => 0.09, Slip_X => 0.11, Slip_Y => 0.135, Rho_Shape => 1.30, Rear_Mu => 1.12, Rear_Stiff => 1.4, Loose_Mu => 0.58, Wet_Loss => 0.26, Snow_Keep => 0.48,
             Engine => (150.0, 300.0, 400.0, 460.0, 500.0, 520.0, 500.0, 450.0, 330.0, 150.0),
-            Engine_I => 0.22, Idle => 900.0, Red_Line => 7400.0,
+            Rpm_Step => 1000.0, Engine_I => 0.22, Idle => 900.0, Red_Line => 7400.0,
             Gears => (3.6, 2.3, 1.68, 1.3, 1.05, 0.86), Final => 3.42, Reverse_R => 3.4,
             Lsd_Preload => 60.0, Lsd_Ramp => 0.3, Front_Share => 0.0, Stop_Comp => 0.11,
             Clutch_Max => 800.0, Brake_Max => 7200.0, Brake_Bias => 0.64,
@@ -53,7 +54,7 @@ package body Vehicle is
             Radius => 0.345, Wheel_I => 1.4,
             Mu => 1.52, Load_Sens => 0.12, Slip_X => 0.085, Slip_Y => 0.105, Rho_Shape => 1.30, Rear_Mu => 1.12, Rear_Stiff => 1.4, Loose_Mu => 0.42, Wet_Loss => 0.46, Snow_Keep => 0.30,
             Engine => (180.0, 340.0, 470.0, 540.0, 590.0, 620.0, 630.0, 610.0, 540.0, 300.0),
-            Engine_I => 0.16, Idle => 1200.0, Red_Line => 8000.0,
+            Rpm_Step => 1000.0, Engine_I => 0.16, Idle => 1200.0, Red_Line => 8000.0,
             Gears => (3.1, 2.25, 1.8, 1.48, 1.25, 1.06), Final => 3.1, Reverse_R => 3.1,
             Lsd_Preload => 100.0, Lsd_Ramp => 0.45, Front_Share => 0.0, Stop_Comp => 0.11,
             Clutch_Max => 1200.0, Brake_Max => 9000.0, Brake_Bias => 0.6,
@@ -69,7 +70,7 @@ package body Vehicle is
             Mu => 1.02, Load_Sens => 0.07, Slip_X => 0.12, Slip_Y => 0.15, Rho_Shape => 1.28,
             Rear_Mu => 1.03, Rear_Stiff => 1.25, Loose_Mu => 0.74, Wet_Loss => 0.28, Snow_Keep => 0.72,
             Engine => (140.0, 280.0, 420.0, 500.0, 540.0, 520.0, 480.0, 400.0, 260.0, 100.0),
-            Engine_I => 0.18, Idle => 1000.0, Red_Line => 7400.0,
+            Rpm_Step => 1000.0, Engine_I => 0.18, Idle => 1000.0, Red_Line => 7400.0,
             Gears => (3.1, 2.2, 1.72, 1.38, 1.14, 0.96), Final => 4.1, Reverse_R => 3.3,
             Lsd_Preload => 80.0, Lsd_Ramp => 0.4, Front_Share => 0.45, Stop_Comp => 0.27,
             Clutch_Max => 900.0, Brake_Max => 6200.0, Brake_Bias => 0.58,
@@ -85,7 +86,7 @@ package body Vehicle is
             Mu => 0.98, Load_Sens => 0.06, Slip_X => 0.13, Slip_Y => 0.16, Rho_Shape => 1.25,
             Rear_Mu => 1.08, Rear_Stiff => 1.45, Loose_Mu => 0.62, Wet_Loss => 0.24, Snow_Keep => 0.50,
             Engine => (100.0, 190.0, 240.0, 265.0, 275.0, 270.0, 250.0, 210.0, 130.0, 60.0),
-            Engine_I => 0.16, Idle => 850.0, Red_Line => 6800.0,
+            Rpm_Step => 1000.0, Engine_I => 0.16, Idle => 850.0, Red_Line => 6800.0,
             Gears => (3.3, 2.1, 1.5, 1.18, 0.96, 0.82), Final => 3.7, Reverse_R => 3.2,
             Lsd_Preload => 30.0, Lsd_Ramp => 0.2, Front_Share => 0.0, Stop_Comp => 0.16,
             Clutch_Max => 500.0, Brake_Max => 5800.0, Brake_Bias => 0.62,
@@ -101,13 +102,31 @@ package body Vehicle is
             Mu => 1.30, Load_Sens => 0.11, Slip_X => 0.09, Slip_Y => 0.11, Rho_Shape => 1.30,
             Rear_Mu => 1.10, Rear_Stiff => 1.35, Loose_Mu => 0.50, Wet_Loss => 0.34, Snow_Keep => 0.38,
             Engine => (200.0, 380.0, 520.0, 620.0, 680.0, 720.0, 740.0, 740.0, 680.0, 400.0),
-            Engine_I => 0.15, Idle => 1100.0, Red_Line => 8500.0,
+            Rpm_Step => 1000.0, Engine_I => 0.15, Idle => 1100.0, Red_Line => 8500.0,
             Gears => (3.0, 2.2, 1.72, 1.4, 1.18, 1.0), Final => 3.2, Reverse_R => 3.0,
             Lsd_Preload => 100.0, Lsd_Ramp => 0.4, Front_Share => 0.3, Stop_Comp => 0.10,
             Clutch_Max => 1300.0, Brake_Max => 9500.0, Brake_Bias => 0.60,
             Cd_A => 0.82, Cl_F => 0.55, Cl_R => 0.80,
             Steer_Lock => 0.50,
-            Paint_R => 0.74, Paint_G => 0.58, Paint_B => 0.04));
+            Paint_R => 0.74, Paint_G => 0.58, Paint_B => 0.04),
+         when Sport_Bike =>
+           --  A litre sports bike with its rider: wheelbase 1.40 m, a high
+           --  centre of gravity, 150 kW at 12 000 rpm
+           (Mass => 275.0, Inertia => 120.0, Pitch_I => 150.0, Roll_I => 40.0,
+            A => 0.70, B => 0.70, Track_F => 0.0, Track_R => 0.0, H_Cg => 0.62,
+            K_F => 30_000.0, K_R => 40_000.0, C_F => 2_000.0, C_R => 2_000.0,
+            Arb_F => 0.0, Arb_R => 0.0,
+            Radius => 0.31, Wheel_I => 0.6,
+            Mu => 1.18, Load_Sens => 0.05, Slip_X => 0.10, Slip_Y => 0.12, Rho_Shape => 1.3,
+            Rear_Mu => 1.0, Rear_Stiff => 1.0, Loose_Mu => 0.55, Wet_Loss => 0.30, Snow_Keep => 0.40,
+            Engine => (20.0, 45.0, 62.0, 75.0, 88.0, 100.0, 110.0, 115.0, 112.0, 95.0),
+            Rpm_Step => 1450.0, Engine_I => 0.05, Idle => 1300.0, Red_Line => 13000.0,
+            Gears => (2.6, 2.0, 1.65, 1.42, 1.28, 1.16), Final => 3.9, Reverse_R => 2.6,
+            Lsd_Preload => 0.0, Lsd_Ramp => 0.0, Front_Share => 0.0, Stop_Comp => 0.12,
+            Clutch_Max => 400.0, Brake_Max => 3000.0, Brake_Bias => 0.75,
+            Cd_A => 0.32, Cl_F => 0.0, Cl_R => 0.0,
+            Steer_Lock => 0.55,
+            Paint_R => 0.70, Paint_G => 0.04, Paint_B => 0.05));
 
    function Tuned (K : Car_Kind; T : Setup) return Spec is
       S : Spec := Spec_Of (K);
@@ -135,7 +154,7 @@ package body Vehicle is
       else (1.0 - Track.Wet * S.Wet_Loss) * (1.0 - Track.Snow * (1.0 - (0.35 + 0.6 * S.Snow_Keep))));
 
    function Fuel_Per_Km (K : Car_Kind) return Float is
-     (case K is when Road_GT => 0.27, when Race_GT3 => 0.33, when Rally_4WD => 0.27, when Classic_RWD => 0.16, when Hyper_AWD => 0.39);
+     (case K is when Road_GT => 0.27, when Race_GT3 => 0.33, when Rally_4WD => 0.27, when Classic_RWD => 0.16, when Hyper_AWD => 0.39, when Sport_Bike => 0.085);
 
    function Speed (C : Car) return Float is
      (Sqrt (C.Vx * C.Vx + C.Vy * C.Vy));
@@ -167,7 +186,7 @@ package body Vehicle is
    end Static_Comp;
 
    function Engine_Torque (S : Spec; Rpm : Float) return Float is
-      R : constant Float := Clamp (Rpm / 1000.0, 0.0, 8.999);
+      R : constant Float := Clamp (Rpm / S.Rpm_Step, 0.0, 8.999);
       I : constant Integer := Integer (Float'Floor (R));
       T : constant Float := R - Float (I);
    begin
@@ -208,9 +227,10 @@ package body Vehicle is
          C.Y := Sum / 4.0 + S.H_Cg;
          C.Pitch := Arctan ((C.Wheels (1).Ground + C.Wheels (2).Ground
                              - C.Wheels (3).Ground - C.Wheels (4).Ground) / (2.0 * (S.A + S.B)));
-         C.Roll := Arctan ((C.Wheels (2).Ground + C.Wheels (4).Ground
-                            - C.Wheels (1).Ground - C.Wheels (3).Ground)
-                           / (S.Track_F + S.Track_R));
+         C.Roll := (if Is_Bike (K) then 0.0
+                    else Arctan ((C.Wheels (2).Ground + C.Wheels (4).Ground
+                                  - C.Wheels (1).Ground - C.Wheels (3).Ground)
+                                 / (S.Track_F + S.Track_R)));
       end;
    end Place;
 
@@ -385,12 +405,14 @@ package body Vehicle is
                declare
                   Up_At : constant Float := S.Idle + (S.Red_Line - 300.0 - S.Idle)
                     * Clamp (0.35 + I.Throttle * 0.9, 0.0, 1.0);
-                  Down_At : constant Float := S.Idle + 700.0
-                    + 2200.0 * I.Throttle + 1200.0 * I.Brake;
+                  --  (in a car's revs; a motorcycle's spin higher, and want to)
+                  Rev : constant Float := (if Is_Bike (C.Kind) then 2.2 else 1.0);
+                  Down_At : constant Float := S.Idle + (700.0
+                    + 2200.0 * I.Throttle + 1200.0 * I.Brake) * Rev;
                begin
                   --  (with the traction control busy: up early, for less torque at the wheels)
                   if C.Gear < 6 and then C.Clutch_Eng > 0.9
-                    and then (C.Rpm > Up_At or else (C.Tc_Active and then C.Rpm > S.Idle + 2800.0))
+                    and then (C.Rpm > Up_At or else (C.Tc_Active and then not Is_Bike (C.Kind) and then C.Rpm > S.Idle + 2800.0))
                   then
                      Request (C.Gear + 1);
                      C.Shift_Cool := 0.4;
@@ -419,6 +441,255 @@ package body Vehicle is
 
    procedure Walls (C : in out Car; S : Spec);
 
+   Bike_Slip : constant := 0.05;
+
+   function Lean_Limit (S : Spec) return Float is
+     (Arctan (S.Mu * 0.95));
+
+   ---------------------------------------------------------------------------
+   --  A motorcycle: one track, steered by leaning
+   ---------------------------------------------------------------------------
+
+   procedure Bike_Step (C : in out Car; S : Spec; I : Inputs; A : Assists) is
+      G_Acc : constant := 9.81;
+      L : constant Float := S.A + S.B;
+      V : constant Float := Float'Max (0.0, C.Vx);
+      FX : constant Float := Sin (C.Heading);
+      FZ : constant Float := -Cos (C.Heading);
+      RX : constant Float := Cos (C.Heading);
+      RZ : constant Float := Sin (C.Heading);
+      Front, Rear : Track.Contact;
+      Grip_F, Grip_R : Float;
+      Ground_Pitch : Float;   --  the slope of the road under the bike
+
+      function Surface_Grip (Surf : Surface_Kind) return Float is
+        ((case Surf is
+            when Asphalt | Kerb => 1.0, when Dirt => S.Loose_Mu,
+            when Grass => 0.5, when Gravel => 0.42)
+         * (1.0 - Track.Wet * S.Wet_Loss) * (1.0 - Track.Snow * (1.0 - S.Snow_Keep)));
+   begin
+      --  The ground under each wheel
+      declare
+         --  (a positive roll tips the top to the left: the tyres are to the right)
+         Contact_X : constant Float := Float (C.X) + RX * S.H_Cg * Sin (C.Roll);
+         Contact_Z : constant Float := Float (C.Z) + RZ * S.H_Cg * Sin (C.Roll);
+      begin
+         Track.Query (Contact_X + FX * S.A, Contact_Z + FZ * S.A, C.Wheels (1).Hint, Front);
+         Track.Query (Contact_X - FX * S.B, Contact_Z - FZ * S.B, C.Wheels (3).Hint, Rear);
+      end;
+      for W in Wheel_Id loop
+         C.Wheels (W).Surf := (if W <= 2 then Front.Surf else Rear.Surf);
+         C.Wheels (W).Off_Y := S.Radius;
+      end loop;
+      Ground_Pitch := Arctan ((Front.Y - Rear.Y) / L);
+      Grip_F := S.Mu * Surface_Grip (Front.Surf);
+      Grip_R := S.Mu * Surface_Grip (Rear.Surf);
+
+      --  Down: it slides along on its side until it stops
+      if C.Fallen_T > 0.0 then
+         C.Fallen_T := C.Fallen_T + Dt;
+         C.Vx := Float'Max (0.0, C.Vx - Dt * 0.55 * G_Acc);
+         C.Vy := C.Vy * (1.0 - Dt * 3.0);
+         C.Rate := C.Rate * (1.0 - Dt * 2.0);
+         C.Roll := C.Roll + (Float'Copy_Sign (1.35, C.Roll) - C.Roll) * Dt * 6.0;
+         C.Throttle_Eff := 0.0;
+         C.Rpm := Float'Max (S.Idle, C.Rpm - Dt * 4000.0);
+         for W in Wheel_Id loop
+            C.Wheels (W).Slide := (if C.Vx > 1.0 then 1.0 else 0.0);
+         end loop;
+      else
+         declare
+            --  Where the rider means to go, as with a car: a curvature
+            Kappa : constant Float := Tan (Clamp (I.Steer, -1.0, 1.0) * S.Steer_Lock * 0.5) / L;
+            Limit : constant Float := Lean_Limit (S) * Clamp (Float'Min (Grip_F, Grip_R) / S.Mu, 0.3, 1.0);
+            Want : constant Float := Clamp (Arctan (V * V * Kappa / G_Acc), -Limit, Limit);
+            Lean_Rate : constant Float := 0.6 + 1.6 * Clamp (V / 20.0, 0.0, 1.0);
+            Low_Speed : constant Float := Clamp ((V - 2.0) / 5.0, 0.0, 1.0);
+            Pedal : constant Float := Clamp (I.Brake, 0.0, 1.0);
+            Rear_Pedal : constant Float := (if I.Handbrake then 1.0 else 0.0);
+            Throttle : Float := Clamp (I.Throttle, 0.0, 1.0);
+            Ratio_Now : constant Float := Ratio (S, Integer'Max (1, C.Gear));
+            Wheel_Rpm : constant Float := V / S.Radius * 60.0 / (2.0 * Pi);
+            Load_F, Load_R : Float;
+            Drive, Brake_F, Brake_R, Drag : Float;
+            Ax_Want, Ay, Used : Float;
+         begin
+            --  Leaning into what the corner needs, as fast as the bike can roll
+            --  (into a right hand turn the top goes right: a negative roll)
+            C.Roll := C.Roll + Clamp (-Want * Low_Speed - C.Roll, -Lean_Rate * Dt, Lean_Rate * Dt);
+
+            --  Gears: the car's logic, on the rear wheel's speed
+            C.Wheels (3).Omega := V / S.Radius;
+            C.Wheels (4).Omega := C.Wheels (3).Omega;
+            C.Wheels (1).Omega := C.Wheels (3).Omega;
+            C.Wheels (2).Omega := C.Wheels (3).Omega;
+            C.Clutch_Eng := 1.0;
+            Gear_Logic (C, S, I, A);
+            if C.Gear = 0 and then A.Mode /= H_Clutch and then Throttle > 0.05 then
+               C.Gear := 1;
+            end if;
+
+            --  The engine: a slipping clutch below the gear's speed
+            C.Rpm := Float'Max (Wheel_Rpm * Ratio_Now, S.Idle + Throttle * 5000.0 * (1.0 - Clamp (V / 6.0, 0.0, 1.0)));
+            if C.Gear <= 0 then
+               C.Rpm := S.Idle + Throttle * (S.Red_Line - S.Idle);
+            end if;
+            C.Rpm := Float'Min (C.Rpm, S.Red_Line + 200.0);
+            if C.Rpm >= S.Red_Line or else C.Shift_T > 0.0
+              or else (A.Fuel_Use and then C.Fuel <= 0.0)
+            then
+               Throttle := 0.0;
+            end if;
+            C.Omega_E := C.Rpm * 2.0 * Pi / 60.0;
+            --  About 290 g for each kWh made, as in a car
+            if A.Fuel_Use and then C.Gear /= 0 then
+               C.Fuel := Float'Max
+                 (0.0, C.Fuel - Dt * Throttle * Engine_Torque (S, C.Rpm) * C.Omega_E * 8.0E-8);
+            end if;
+
+            --  Weight on each wheel, shifting with the acceleration
+            Load_F := S.Mass * G_Acc * S.B / L - S.Mass * C.Ax * S.H_Cg / L;
+            Load_R := S.Mass * G_Acc - Load_F;
+            Load_F := Float'Max (0.0, Load_F);
+            Load_R := Float'Max (0.0, Load_R);
+
+            Drive := (if C.Gear > 0
+                      then Throttle * Engine_Torque (S, C.Rpm) * Ratio_Now / S.Radius
+                      else 0.0);
+            Brake_F := Pedal * S.Brake_Max * S.Brake_Bias / S.Radius;
+            Brake_R := (Pedal * (1.0 - S.Brake_Bias) + 0.5 * Rear_Pedal) * S.Brake_Max / S.Radius;
+            Drag := 0.5 * 1.2 * S.Cd_A * V * V + 0.015 * S.Mass * G_Acc;
+
+            --  Cornering takes grip from braking and driving: the friction circle
+            Ay := V * C.Rate;
+            declare
+               Lat_Use_F : constant Float := Clamp (abs Ay / (Grip_F * G_Acc), 0.0, 1.0);
+               Lat_Use_R : constant Float := Clamp (abs Ay / (Grip_R * G_Acc), 0.0, 1.0);
+               Room_F : constant Float := Grip_F * Load_F * Sqrt (1.0 - Lat_Use_F ** 2);
+               Room_R : constant Float := Grip_R * Load_R * Sqrt (1.0 - Lat_Use_R ** 2);
+               Abs_Hold : constant Boolean := A.Abs_On and then V > 3.0;
+               Over_F : constant Float := Brake_F / Float'Max (1.0, Room_F);
+               Over_R : Float;
+            begin
+               C.Abs_Active := Abs_Hold and then (Over_F > 1.0 or else Over_R > 1.0) and then Pedal > 0.0;
+               --  Traction control: no more drive than the rear can take
+               C.Tc_Active := A.Tc_On and then Drive > Room_R;
+               if A.Tc_On then
+                  Drive := Float'Min (Drive, Room_R);
+               end if;
+               --  (what the ABS lets through, it does not lock)
+               Over_R := Float'Max ((if Abs_Hold then Float'Min (Brake_R, Room_R) else Brake_R), Drive)
+                 / Float'Max (1.0, Room_R);
+               Ax_Want := (Drive
+                           - Float'Min (Brake_F, (if Abs_Hold then Room_F else Room_F * 1.1))
+                           - Float'Min (Brake_R, Room_R) - Drag) / S.Mass;
+               --  Too much asked of a leaned tyre: it lets go, and the bike goes down
+               Used := (Over_F + Over_R) * 0.5;
+               if (Over_F > 1.25 and then not Abs_Hold and then abs C.Roll > 0.35)
+                 or else (Over_R > 1.6 and then abs C.Roll > 0.6)
+                 or else (Front.Surf in Grass | Gravel and then abs C.Roll > 0.45 and then V > 12.0)
+               then
+                  C.Fallen_T := Dt;
+               end if;
+               for W in Wheel_Id loop
+                  C.Wheels (W).Slide := Clamp ((if W <= 2 then Over_F else Over_R) - 1.0, 0.0, 1.0);
+               end loop;
+            end;
+            pragma Unreferenced (Used);
+
+            --  Wheelie and stoppie: the front lifts when the drive tips the bike
+            --  back; the anti-wheelie cuts the throttle first
+            declare
+               Tip : constant Float := Ax_Want * S.H_Cg - G_Acc * S.B;   --  > 0: front lifts
+               Dive : constant Float := -Ax_Want * S.H_Cg - G_Acc * S.A; --  > 0: rear lifts
+               Target : Float := 0.0;
+            begin
+               if A.Stunt and then abs C.Roll < 0.12 and then I.Throttle > 0.7
+                 and then V > 8.0 and then V < 62.0
+                 and then (Tip > -4.5 or else (C.Pitch - Ground_Pitch > 0.1 and then Tip > -9.0))
+               then
+                  --  A show rider: up on the back wheel down the straights,
+                  --  held at the balance with the throttle
+                  Target := Float'Min (0.42, 0.24 + Float'Max (0.0, Tip + 4.5) * 0.05);
+               elsif A.Stunt and then abs C.Roll < 0.12 and then Dive > -1.5 and then Pedal > 0.5 then
+                  --  and the back wheel up under the brakes
+                  Target := -Float'Min (0.22, 0.08 + (Dive + 1.5) * 0.06);
+               elsif Tip > 0.0 then
+                  Target := Float'Min (0.6, Tip * 0.3);
+                  if A.Tc_On then
+                     Ax_Want := G_Acc * S.B / S.H_Cg;   --  held at the balance
+                     Target := 0.05;
+                  end if;
+               elsif Dive > 0.0 then
+                  Target := -Float'Min (0.4, Dive * 0.2);
+                  if A.Abs_On then
+                     Ax_Want := -G_Acc * S.A / S.H_Cg;
+                     Target := -0.03;
+                  end if;
+               end if;
+               C.Pitch_V := 0.0;
+               C.Pitch := C.Pitch + (Ground_Pitch + Target - C.Pitch) * Clamp (Dt * 5.0, 0.0, 1.0);
+               if abs (C.Pitch - Ground_Pitch) > 0.55 then
+                  C.Fallen_T := Dt;   --  over the back, or over the bars
+               end if;
+            end;
+
+            --  Rubber goes with the work the tyres do, a few per cent of it
+            --  sliding; the rear carries the drive
+            if A.Wear_Rate > 0.0 then
+               declare
+                  Work : constant Float := S.Mass * V * Bike_Slip
+                    * (abs Ax_Want + abs (V * C.Rate));
+               begin
+                  for W in Wheel_Id loop
+                     C.Wheels (W).Wear := Float'Min
+                       (1.0, C.Wheels (W).Wear + Dt * A.Wear_Rate * Wear_Per_Joule * Work
+                          * (if W >= 3 then 0.6 else 0.4));
+                  end loop;
+               end;
+            end if;
+
+            C.Throttle_Eff := Throttle;
+            C.Vx := Float'Max (0.0, C.Vx + Dt * Ax_Want);
+            C.Ax := C.Ax + (Ax_Want - C.Ax) * 0.02;
+            --  Turning: by the lean at speed, by the bars when slow
+            C.Rate := Low_Speed * G_Acc * Tan (-C.Roll) / Float'Max (V, 2.0)
+              + (1.0 - Low_Speed) * Kappa * V;
+            C.Ay := C.Ay + (V * C.Rate - C.Ay) * 0.02;
+            C.Vy := 0.0;
+            C.Steer := Arctan (Kappa * L);
+         end;
+      end if;
+
+      --  Along the ground, the body upright on its lean
+      C.Heading := C.Heading + Dt * C.Rate;
+      if C.Heading > Pi then
+         C.Heading := C.Heading - 2.0 * Pi;
+      elsif C.Heading < -Pi then
+         C.Heading := C.Heading + 2.0 * Pi;
+      end if;
+      C.X := C.X + Long_Float (Dt * (C.Vx * FX + C.Vy * RX));
+      C.Z := C.Z + Long_Float (Dt * (C.Vx * FZ + C.Vy * RZ));
+      --  Up on one wheel, the bike turns about the one still down
+      C.Y := (Front.Y + Rear.Y) * 0.5 + S.H_Cg * Cos (C.Roll)
+        + (if C.Pitch > Ground_Pitch then S.B * Sin (C.Pitch - Ground_Pitch)
+           else S.A * Sin (Ground_Pitch - C.Pitch));
+      C.Vz := 0.0;
+      for W in Wheel_Id loop
+         C.Wheels (W).Angle := C.Wheels (W).Angle + C.Vx / S.Radius * Dt;
+         if C.Wheels (W).Angle > 2.0 * Pi then
+            C.Wheels (W).Angle := C.Wheels (W).Angle - 2.0 * Pi;
+         end if;
+      end loop;
+      Walls (C, S);
+      if C.Impact > 9.0 and then C.Fallen_T = 0.0 then
+         C.Fallen_T := Dt;
+      end if;
+      C.Impact := Float'Max (0.0, C.Impact - Dt * 4.0);
+      C.Scrape := Float'Max (0.0, C.Scrape - Dt * 5.0);
+      C.Rack := 0.0;
+   end Bike_Step;
+
    procedure Step (C : in out Car; S : Spec; I : Inputs; A : Assists) is
       Sin_H : constant Float := Sin (C.Heading);
       Cos_H : constant Float := Cos (C.Heading);
@@ -441,6 +712,10 @@ package body Vehicle is
       --  Gravity along the ground
       Grade, Side_Slope : Float;
    begin
+      if C.Kind = Sport_Bike then
+         Bike_Step (C, S, I, A);
+         return;
+      end if;
       C.Steer := Steer;
       --  A new hit since last time: above a knock, something breaks
       if A.Damage > 0.0 and then C.Impact > C.Seen_Impact + 3.0 then
