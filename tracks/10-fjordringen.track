@@ -1,0 +1,33 @@
+# An AdaRace road.  One setting a line, then the points it runs through, closed
+# back to the first: x  z  height  half-width  banking (metres, degrees; banking
+# is positive when the right side is lower).  See "Your own roads" in the README.
+name Fjordringen
+kind circuit
+# A long straight on the shore of a fjord, a fast right up the hillside, a
+# hairpin at the top, esses along the plateau and a plunge back down to the
+# water.
+# The fjord, beside the straight and below the plateau
+water   -100.0    150.0   105.0
+water    150.0    150.0   105.0
+water    400.0    150.0   105.0
+water    650.0    150.0   105.0
+points
+     0.0      0.0    6.0   6.5   0.0
+   300.0     -5.0    6.0   6.5   0.0
+   600.0      5.0    6.0   6.5   0.0
+   860.0     10.0    7.0   6.5   0.0
+  1020.0     40.0    9.0   6.5   3.0
+  1140.0    130.0   14.0   6.5   5.0
+  1195.0    260.0   22.0   6.5   4.0
+  1180.0    390.0   32.0   6.0   2.0
+  1080.0    470.0   38.0   6.0  -4.0
+   930.0    440.0   42.0   6.0  -2.0
+   740.0    400.0   45.0   6.0   0.0
+   520.0    470.0   46.0   6.0   2.0
+   310.0    420.0   45.0   6.0  -2.0
+   140.0    340.0   43.0   6.0   0.0
+   -60.0    390.0   40.0   6.0   2.0
+  -250.0    330.0   34.0   6.0   3.0
+  -380.0    200.0   24.0   6.5   4.0
+  -360.0     70.0   14.0   6.5   3.0
+  -220.0      5.0    8.0   6.5   0.0

@@ -284,7 +284,9 @@ package body Session is
       end;
 
       declare
-         Look : constant Float := 5.0 + 0.32 * Float'Max (0.0, V);
+         --  (a motorcycle must roll into its lean first: it looks further)
+         Look : constant Float := 5.0 + (if Vehicle.Is_Bike (C.Kind) then 0.45 else 0.32)
+           * Float'Max (0.0, V);
          Steps : constant Integer := Integer (Look / Track.Spacing);
          J : constant Natural := Track.Next (Idx, Steps);
          A : Track.Sample renames Track.Samples (J);

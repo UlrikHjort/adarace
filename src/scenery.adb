@@ -968,7 +968,11 @@ package body Scenery is
          end;
       end loop;
 
-      --  Water: a harbour basin, a river, each round piece a square on it
+   end Build_City;
+
+   --  Water: a harbour basin, a river, a fjord: each round piece a square on it
+   procedure Build_Water (O : in out Builder) is
+   begin
       for K in 1 .. Track.Pool_Count loop
          declare
             R : constant Float := Track.Pools (K).R + 20.0;
@@ -985,7 +989,7 @@ package body Scenery is
             Add (O, ((X + R, Y, Z - R), N, 0.0, 0.0, 0.0, Water, 0.0, 0.0));
          end;
       end loop;
-   end Build_City;
+   end Build_Water;
 
    procedure Build_Trees is
    begin
@@ -1085,6 +1089,7 @@ package body Scenery is
       Build_Horizon (G);
       Build_Road (R);
       Build_Edges (R, G);
+      Build_Water (O);
       if Track.Is_Stage then
          Build_Stage (O, R);
       elsif Track.Is_City then

@@ -426,13 +426,14 @@ procedure Simtest is
                if C.Impact > 1.0 then
                   Hits := Hits + 1;
                end if;
-               if C.Fallen_T > 0.0 and then not Was_Down then
-                  Falls := Falls + 1;
-                  Put_Line ("    fell at s=" & Img (Track.Samples (C.Hint).S, 0) & " v="
-                            & Img (C.Vx * 3.6, 0) & " lean=" & Img (C.Roll * 57.3, 0));
-               end if;
-               Was_Down := C.Fallen_T > 0.0;
             end if;
+            --  (a fall counts from the start, on the way to the line too)
+            if C.Fallen_T > 0.0 and then not Was_Down then
+               Falls := Falls + 1;
+               Put_Line ("    fell at s=" & Img (Track.Samples (C.Hint).S, 0) & " v="
+                         & Img (C.Vx * 3.6, 0) & " lean=" & Img (C.Roll * 57.3, 0));
+            end if;
+            Was_Down := C.Fallen_T > 0.0;
             Was_Off := Off;
          end;
          Laps_Done := Session.Laps (1).Lap;
@@ -1946,6 +1947,22 @@ begin
       Put_Line (if Failed = 0 then "All passed" else Failed'Image & " FAILED");
       return;
    end if;
+   --  Every road in the folder loads (a bad one is left out with a message)
+   declare
+      use Ada.Directories;
+      Search : Search_Type;
+      Item : Directory_Entry_Type;
+      Files : Natural := 0;
+   begin
+      Start_Search (Search, "tracks", "*.track");
+      while More_Entries (Search) loop
+         Get_Next_Entry (Search, Item);
+         Files := Files + 1;
+      end loop;
+      End_Search (Search);
+      Check (Files = Track.Track_Count,
+             "every road in tracks/ loads:" & Track.Track_Count'Image & " of" & Files'Image);
+   end;
    for T in 1 .. Track.Track_Count loop
       Track_Shape (T);
    end loop;

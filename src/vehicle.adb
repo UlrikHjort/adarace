@@ -125,7 +125,7 @@ package body Vehicle is
             Lsd_Preload => 0.0, Lsd_Ramp => 0.0, Front_Share => 0.0, Stop_Comp => 0.12,
             Clutch_Max => 400.0, Brake_Max => 3000.0, Brake_Bias => 0.75,
             Cd_A => 0.32, Cl_F => 0.0, Cl_R => 0.0,
-            Steer_Lock => 0.55,
+            Steer_Lock => 0.28,   --  a bike's bars turn little
             Paint_R => 0.70, Paint_G => 0.04, Paint_B => 0.05));
 
    function Tuned (K : Car_Kind; T : Setup) return Spec is
@@ -513,7 +513,7 @@ package body Vehicle is
       else
          declare
             --  Where the rider means to go, as with a car: a curvature
-            Kappa : constant Float := Tan (Clamp (I.Steer, -1.0, 1.0) * S.Steer_Lock * 0.5) / L;
+            Kappa : constant Float := Tan (Clamp (I.Steer, -1.0, 1.0) * S.Steer_Lock) / L;
             Limit : constant Float := Lean_Limit (S) * Clamp (Float'Min (Grip_F, Grip_R) / S.Mu, 0.3, 1.0);
             Want : constant Float := Clamp (Arctan (V * V * Kappa / G_Acc), -Limit, Limit);
             Lean_Rate : constant Float := 0.6 + 1.6 * Clamp (V / 20.0, 0.0, 1.0);

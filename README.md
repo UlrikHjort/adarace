@@ -109,10 +109,12 @@ Physics run at 1 kHz in an Ada task of their own, independent of the frame rate.
   Sent at 125 Hz.
 
 Five cars: a road GT, a GT3 with slicks and wings, a four wheel drive rally car, a light
-classic and a mid-engined hypercar, and a motorcycle (see below). Five circuits: Søndersø Ring (4.9 km), Monte Ferro
+classic and a mid-engined hypercar, and a motorcycle (see below). Seven circuits: Søndersø Ring (4.9 km), Monte Ferro
 (3.2 km, 64 m of climb), Kalvø Speedway (3.2 km, banked oval), the Havnebyen street circuit
-(2.8 km, between walls along a harbour) and the Boulevard Royal street circuit on real
-city streets (3.8 km), and three rally stages.
+(2.8 km, between walls along a harbour), the Boulevard Royal street circuit on real
+city streets (3.8 km), Fjordringen (3.7 km, a long straight by a fjord and a climb to a
+plateau) and Storø TT (7 km of narrow island road, 155 m up to the moor and down the
+switchbacks, made for the motorcycle). There are also three rally stages.
 
 Hot laps against the ghost of your best lap, which is kept per car and circuit
 in `~/.local/share/adarace`, or races against up to seven AI cars on the same
@@ -298,7 +300,8 @@ or stage needs no code. `tracks/04-skovvej.track` is a good one to start from:
     ...
 
 A street circuit adds `setting city`: walls at the kerb with a catch fence, street lamps, a
-town of buildings and square corners. `water x z radius` digs a harbour basin there.
+town of buildings and square corners. `water x z radius`, on any road, digs out water there
+(a harbour basin, a fjord, the sea). Settings come before `points`.
 
 Real streets: `scripts/osm_road.py` makes a street circuit from OpenStreetMap data. Give it the
 map and a few points to pass through, and it routes along drivable roads, rounds the corners,
