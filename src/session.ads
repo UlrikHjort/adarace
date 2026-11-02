@@ -31,6 +31,7 @@ package Session is
       Season   : Season_Kind := Summer;
       No_Records : Boolean := False;   --  a lesson: nothing saved, no ghost
       Two_Players : Boolean := False;  --  car 2 is the second player's
+      Online : Boolean := False;       --  car 2 is the other machine's
    end record;
 
    type Sector_Array is array (0 .. 2) of Float;
@@ -111,6 +112,19 @@ package Session is
 
    procedure Reset_Player;
    --  Back onto the racing line, stopped (costs the lap; on a stage, time)
+
+   --  Online: the other machine's car as last heard, and how long ago
+   type Remote_View is record
+      X, Z, Y, Heading, Pitch, Roll, Vx, Vy, Rate, Steer, Rpm : Float := 0.0;
+      Gear : Integer := 0;
+      Lap : Natural := 0;
+      Lap_Time, S, Last_S, Finish_Time : Float := 0.0;
+      Finished, On_Grid : Boolean := True;
+      Age : Float := 0.0;
+      Have : Boolean := False;
+   end record;
+   Remote : Remote_View;
+   Online_Ready : Boolean := False;   --  both there: the lights may start
 
    Second_Hands : Vehicle.Inputs;
    --  The second player's controls, in a race of two players (car 2)

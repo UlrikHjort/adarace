@@ -15,6 +15,7 @@ with Ada.Text_IO;
 
 with Championship;
 with Codriver;
+with Net;
 with Rally;
 with School;
 with Session;
@@ -1392,6 +1393,49 @@ procedure Simtest is
       Session.Force_AI := False;
    end Flags;
 
+   --  The network's words: a car's state goes out and comes back the same
+   procedure Wire is
+      A : constant Net.Car_State :=
+        (X => 123.25, Z => -456.5, Y => 7.75, Heading => 1.5, Pitch => 0.01, Roll => -0.02,
+         Vx => 55.5, Vy => -0.5, Rate => 0.1, Steer => -0.2, Rpm => 6543.0, Gear => 4,
+         Lap => 2, Lap_Time => 61.5, S => 1234.5, Last_S => 1230.0, Finish_Time => 0.0,
+         Finished => False, On_Grid => False);
+      B : Net.Car_State;
+      Good : Boolean;
+   begin
+      Net.Decode (Net.Encode (A), B, Good);
+      Check (Good and then abs (B.X - A.X) < 0.01 and then abs (B.Z - A.Z) < 0.01
+             and then B.Gear = 4 and then B.Lap = 2 and then abs (B.S - A.S) < 0.01
+             and then not B.On_Grid,
+             "a car's state crosses the network whole");
+      Net.Decode ("ADARACE1 STATE 1 2 3", B, Good);
+      Check (not Good, "a short message is refused");
+      Net.Decode ("SOMETHING ELSE ENTIRELY", B, Good);
+      Check (not Good, "and a stranger's");
+      --  The other machine's car in the session: not the AI's, put where it says
+      declare
+         R : Session.Settings := Hotlap (Race_GT3);
+         N : Vehicle.Inputs;
+      begin
+         Track.Load (1);
+         R.Mode := Session.Race;
+         R.Online := True;
+         Session.Start (R);
+         Check (Session.Car_Count = 2 and then not Session.AI_Drives (2), "online: two cars, the other not the AI's");
+         Session.Online_Ready := False;
+         for I in 1 .. 3000 loop
+            Session.Step (N);
+         end loop;
+         Check (not Session.Lights_Out and then Session.Time = 0.0, "the lights wait for the other machine");
+         Session.Remote := (X => Track.Samples (100).X, Z => Track.Samples (100).Z, Y => 20.0,
+                            Vx => 30.0, Have => True, Age => 0.0, Lap => 1, others => <>);
+         Session.Online_Ready := True;
+         Session.Step (N);
+         Check (abs (Float (Session.Cars (2).X) - Track.Samples (100).X) < 1.0
+                and then Session.Laps (2).Lap = 1, "the other car is where it said, on its lap");
+      end;
+   end Wire;
+
    --  A rally from end to end, the AI driving, damage going along
    procedure Rally_Event is
       R : Session.Settings := Hotlap (Rally_4WD);
@@ -1773,6 +1817,7 @@ begin
    Two_Up;
    Characters;
    Flags;
+   Wire;
    Spoken_Notes;
    Conditions;
    Lessons;

@@ -109,8 +109,9 @@ package body Session is
    end Watch_Race;
 
    function AI_Drives (I : Car_Index) return Boolean is
-     ((I > 1 and then not (Config.Two_Players and then I = 2))
-      or else Config.Mode = Demo or else Force_AI);
+     (not (Config.Online and then I = 2)
+      and then ((I > 1 and then not (Config.Two_Players and then I = 2))
+                or else Config.Mode = Demo or else Force_AI));
 
    function Save_Name return String is
       Home : constant String :=
@@ -649,7 +650,7 @@ package body Session is
       end if;
       case Config.Mode is
          when Race =>
-            Car_Count := 1 + Config.Opponents;
+            Car_Count := (if Config.Online then 2 else 1 + Config.Opponents);
             Lights := 0;
             Lights_Out := False;
          when Hotlap =>
@@ -824,6 +825,50 @@ package body Session is
       end if;
    end Pit_Service;
 
+   --  The other machine's car: where it last said, carried on by its speed
+   procedure Follow_Remote (I : Car_Index) is
+      C : Car renames Cars (I);
+      R : Remote_View renames Remote;
+      Ahead : constant Float := Float'Min (R.Age, 0.25);
+      H : constant Float := R.Heading + R.Rate * Ahead;
+      FX : constant Float := Sin (R.Heading);
+      FZ : constant Float := -Cos (R.Heading);
+   begin
+      if not R.Have then
+         return;
+      end if;
+      --  (body axes: forward FX, FZ; to the right Cos, Sin of the heading)
+      C.X := Long_Float (R.X + (R.Vx * FX + R.Vy * Cos (R.Heading)) * Ahead);
+      C.Z := Long_Float (R.Z + (R.Vx * FZ + R.Vy * Sin (R.Heading)) * Ahead);
+      C.Y := R.Y;
+      C.Heading := H;
+      C.Pitch := R.Pitch;
+      C.Roll := R.Roll;
+      C.Vx := R.Vx;
+      C.Vy := R.Vy;
+      C.Rate := R.Rate;
+      C.Steer := R.Steer;
+      C.Rpm := R.Rpm;
+      C.Gear := Integer'Max (-1, Integer'Min (6, R.Gear));
+      for W in Wheel_Id loop
+         C.Wheels (W).Off_Y := Spec.Radius - 0.02;
+         C.Wheels (W).Angle := C.Wheels (W).Angle + R.Vx / Spec.Radius * Dt;
+      end loop;
+      declare
+         Idx : Natural;
+         T, D : Float;
+      begin
+         Track.Locate (Float (C.X), Float (C.Z), C.Hint, Idx, T, D);
+      end;
+      Laps (I).Lap := R.Lap;
+      Laps (I).Lap_Time := R.Lap_Time;
+      Laps (I).S := R.S;
+      Laps (I).Last_S := R.Last_S;
+      Laps (I).Finished := R.Finished;
+      Laps (I).Finish_Time := R.Finish_Time;
+      Laps (I).On_Grid := R.On_Grid;
+   end Follow_Remote;
+
    procedure Step (Player : Vehicle.Inputs) is
       Ai_Assists : constant Assists := (Abs_On => True, Tc_On => True, Mode => Automatic, others => <>);
       --  (Car 1 in the menu's demo keeps its wear switches, for the tests)
@@ -834,7 +879,10 @@ package body Session is
       Hands : Vehicle.Inputs := Player;
    begin
       Tick := Tick + 1;
-      Time := Time + Dt;
+      --  Online: the lights wait for the other machine
+      if not (Config.Online and then not Online_Ready) then
+         Time := Time + Dt;
+      end if;
 
       --  Start lights: one red a second, then out at a moment not quite known
       if not Lights_Out then
@@ -858,7 +906,9 @@ package body Session is
       end if;
 
       for I in 1 .. Car_Count loop
-         if AI_Drives (I) then
+         if Config.Online and then I = 2 then
+            Follow_Remote (I);
+         elsif AI_Drives (I) then
             if I = 1 then
                Vehicle.Step (Cars (I), Player_Spec, AI (I).Inputs, Demo_Assists);
             else
@@ -869,7 +919,7 @@ package body Session is
             if Config.Mode = Stage and then Laps (1).Finished then
                Hands.Throttle := 0.0;
                Hands.Brake := Float'Max (Hands.Brake, 0.5);
-            elsif Config.Mode = Stage and then not Lights_Out then
+            elsif (Config.Mode = Stage or else Config.Online) and then not Lights_Out then
                Hands.Brake := Float'Max (Hands.Brake, 0.2);   --  on the line, held
                Hands.Throttle := 0.0;
             end if;
@@ -893,7 +943,9 @@ package body Session is
                               Mode => Automatic, Damage => Config.Assist.Damage, others => <>));
             end if;
          end if;
-         Update_Lap (I);
+         if not (Config.Online and then I = 2) then
+            Update_Lap (I);
+         end if;
       end loop;
 
       if Car_Count > 1 and then Tick mod 2 = 0 then

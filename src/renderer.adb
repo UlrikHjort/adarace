@@ -493,7 +493,8 @@ package body Renderer is
       M : constant Mat4 := Car_Matrix (P);
       Paint : constant Vec3 :=
         (if I = 1 then (Session.Spec.Paint_R, Session.Spec.Paint_G, Session.Spec.Paint_B)
-         elsif I = 2 and then Session.Config.Two_Players then (0.85, 0.32, 0.02)
+         elsif I = 2 and then (Session.Config.Two_Players or else Session.Config.Online)
+         then (0.85, 0.32, 0.02)
          else Paints (I));
    begin
       Shaders.Set (U_Paint, Paint);

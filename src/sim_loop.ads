@@ -54,6 +54,7 @@ package Sim_Loop is
       Service_Left : Float := 0.0;
       Service_Offer : Boolean := False;
       In_Pit_Lane : Boolean := False;
+      Waiting_For_Peer : Boolean := False;
       Yellow_Ahead : Boolean := False;
       VSC_Left : Float := 0.0;
       Penalty : Float := 0.0;

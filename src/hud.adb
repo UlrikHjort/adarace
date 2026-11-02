@@ -432,7 +432,7 @@ package body Hud is
                            Color (0.85, 0.85, 0.88);
                         end if;
                         Text (Trim (P'Image) & "  "
-                              & Championship.Driver_Name (I)
+                              & (if Session.Config.Online and then I = 2 then "OTHER" else Championship.Driver_Name (I))
                               & "  L" & Trim (Natural'Image (F.Laps (I).Lap + 1)),
                               X + 12.0 * S, Y0 + 24.0 * S + 24.0 * S * Float (P), 15.0 * S);
                      end if;
@@ -759,7 +759,12 @@ package body Hud is
       end if;
 
       --  Flags, the safety car, the pit lane: a band across the top
-      if F.VSC_Left > 0.0 or else F.Yellow_Ahead or else F.In_Pit_Lane then
+      if F.Waiting_For_Peer then
+         Color (0.1, 0.25, 0.7, 0.85);
+         Rect (Cx - 300.0 * S, 84.0 * S, 600.0 * S, 40.0 * S);
+         Color (1.0, 1.0, 1.0);
+         Text ("WAITING FOR THE OTHER DRIVER", Cx, 112.0 * S, 22.0 * S, 0.5);
+      elsif F.VSC_Left > 0.0 or else F.Yellow_Ahead or else F.In_Pit_Lane then
          declare
             Line : constant String :=
               (if F.VSC_Left > 0.0 then

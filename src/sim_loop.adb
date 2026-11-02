@@ -7,6 +7,7 @@ with Ada.Numerics.Elementary_Functions;
 with Ada.Real_Time;
 with Ada.Text_IO;
 
+with Net;
 with Telemetry;
 with Track;
 
@@ -17,6 +18,7 @@ package body Sim_Loop is
    use type Track.Surface_Kind;
    use type Vehicle.Car_Kind;
    use type Session.Mode_Kind;
+   use type Net.Role;
 
    Epoch : constant Time := Clock;
 
@@ -319,6 +321,42 @@ package body Sim_Loop is
       return I;
    end Gather;
 
+   --  Online: what the other machine says, and what to tell it
+   procedure Network_Step (Count : Natural) is
+      R : Net.Car_State;
+      Age : Float;
+      Have : Boolean;
+   begin
+      Net.Latest (R, Age, Have);
+      Session.Remote :=
+        (X => R.X, Z => R.Z, Y => R.Y, Heading => R.Heading, Pitch => R.Pitch, Roll => R.Roll,
+         Vx => R.Vx, Vy => R.Vy, Rate => R.Rate, Steer => R.Steer, Rpm => R.Rpm, Gear => R.Gear,
+         Lap => R.Lap, Lap_Time => R.Lap_Time, S => R.S, Last_S => R.Last_S,
+         Finish_Time => R.Finish_Time, Finished => R.Finished, On_Grid => R.On_Grid,
+         Age => Age, Have => Have);
+      --  Both there and driving: the lights may start
+      if not Session.Online_Ready and then Have and then Net.Peer_Seen then
+         Session.Online_Ready := True;
+      end if;
+      if Count mod 17 = 0 then
+         declare
+            C : Vehicle.Car renames Session.Cars (1);
+            L : Session.Lap_Info renames Session.Laps (1);
+         begin
+            Net.Send_State
+              ((X => Float (C.X), Z => Float (C.Z), Y => C.Y, Heading => C.Heading,
+                Pitch => C.Pitch, Roll => C.Roll, Vx => C.Vx, Vy => C.Vy, Rate => C.Rate,
+                Steer => C.Steer, Rpm => C.Rpm, Gear => C.Gear, Lap => L.Lap,
+                Lap_Time => L.Lap_Time, S => L.S, Last_S => L.Last_S,
+                Finish_Time => L.Finish_Time, Finished => L.Finished, On_Grid => L.On_Grid));
+         end;
+      end if;
+      --  The host keeps giving the race and the start, for a guest still in its menu
+      if Net.Current_Role = Net.Host and then Count mod 250 = 0 then
+         Net.Send_Go (Track.Loaded, Session.Config.Laps);
+      end if;
+   end Network_Step;
+
    function Make_Frame (Tm : Long_Float; I : Vehicle.Inputs) return Frame is
       F : Frame;
    begin
@@ -377,6 +415,7 @@ package body Sim_Loop is
          F.Toe := C.Toe;
          F.Service_Left := Session.Service_Left;
          F.Service_Offer := Session.Service_Offer;
+         F.Waiting_For_Peer := Session.Config.Online and then not Session.Online_Ready;
          F.In_Pit_Lane := Session.In_Pit_Lane;
          F.VSC_Left := Float'Max (0.0, Session.VSC_Until - Session.Time);
          F.Penalty := Session.Laps (1).Penalty;
@@ -493,6 +532,9 @@ package body Sim_Loop is
                   begin
                      if Session.Config.Two_Players then
                         Gather_Second (0.002);
+                     end if;
+                     if Session.Config.Online then
+                        Network_Step (Count);
                      end if;
                      Session.Step (I);
                      I.Shift_Up := False;

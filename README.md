@@ -233,6 +233,13 @@ virtual safety car: everyone slows to about 60 % of racing speed, and going fast
 for long costs five seconds at the finish. The pit lane runs along the left of the start and
 finish straight with a 60 km/h limiter, the pit box in the middle of it.
 
+Online on your home network: one machine chooses *Online: host a race* and the circuit and
+laps; the other chooses *Online: join a race*, types the host's address (or its name) in *Host
+to join* and presses DRIVE. Both start on the same lights. Each machine drives its own car and
+sends where it is thirty times a second (UDP port 41000); the other car is drawn there, carried
+on by its speed between messages. Each side draws the other in its own car's shape, and only
+two can race; it is meant for a home network, not the internet.
+
 ## Your own roads
 
 Roads are text files in `tracks/`, read at start in the order of their names, so a new circuit
