@@ -15,7 +15,7 @@ cd "$(dirname "$0")/.."
 OUT=sounds/codriver
 WORDS="left right one two three four five six long hairpin over crest into finish"
 [ -f "$OUT/finish.pcm" ] && [ -z "$FORCE" ] && exit 0
-command -v ffmpeg > /dev/null || { echo "No co-driver voice: ffmpeg is needed"; exit 0; }
+command -v ffmpeg > /dev/null || { echo "No co-driver voice: ffmpeg is needed (sudo apt install ffmpeg)"; exit 0; }
 
 PIPER=${PIPER:-$(command -v piper || echo "$HOME/prg/piper/piper")}
 [ -x "$PIPER" ] || PIPER=""
@@ -27,7 +27,7 @@ if [ -n "$PIPER" ] && [ -n "$PIPER_VOICE" ]; then
 elif command -v espeak-ng > /dev/null; then
     MAKER=espeak
 else
-    echo "No co-driver voice: neither piper nor espeak-ng found"; exit 0
+    echo "No co-driver voice: neither piper nor espeak-ng found (see \"The co-driver's voice\" in the README)"; exit 0
 fi
 
 mkdir -p "$OUT"
@@ -44,3 +44,6 @@ for w in $WORDS; do
         -ar 44100 -ac 1 -f s16le "$OUT/$w.pcm"
 done
 echo "Co-driver's voice made with $MAKER in $OUT"
+if [ "$MAKER" = espeak ]; then
+    echo "(For a natural voice, install Piper: see \"The co-driver's voice\" in the README.)"
+fi
