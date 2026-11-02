@@ -44,6 +44,7 @@ with GL;
 with GL_Area;
 with Hud;
 with Hud_Layer;
+with Championship;
 with Rally;
 with Recorder;
 with Renderer;
@@ -317,12 +318,15 @@ package body App is
 
    function In_Rally return Boolean is (Combo_Mode.Get_Active = 3);
 
+   function In_Season return Boolean is (Combo_Mode.Get_Active = 4);
+
    function Lesson_Chosen return School.Lesson_Id is
      (School.Lesson_Id (Integer (Combo_Lesson.Get_Active) + 1));
 
    function Drive_Track return Track.Track_Id is
      (if In_School then School.Circuit (Lesson_Chosen)
       elsif In_Rally then Rally.Current_Road
+      elsif In_Season then Championship.Current_Road
       else Chosen_Track);
 
    procedure Begin_Drive is
@@ -337,6 +341,11 @@ package body App is
       elsif not In_Rally then
          Rally.Active := False;
       end if;
+      if In_Season and then In_Menu then
+         Championship.Begin_Season (Natural (Combo_Opp.Get_Active) + 2);
+      elsif not In_Season then
+         Championship.Active := False;
+      end if;
       Store_Knobs;
       Save_Choices;
       Sim_Loop.Halt;
@@ -345,6 +354,9 @@ package body App is
       end if;
       S.Mode := (if Track.Is_Stage then Session.Stage
                  elsif Combo_Mode.Get_Active = 0 then Session.Hotlap else Session.Race);
+      if In_Season then
+         S.Mode := Session.Race;
+      end if;
       S.Kind := Chosen_Car;
       S.Opponents := Natural (Combo_Opp.Get_Active) + 1;
       S.Laps := (case Integer (Combo_Laps.Get_Active) is
@@ -431,7 +443,15 @@ package body App is
    --  At the end of a stage of a rally: on to the next, or home after the last
    procedure Advance_Rally is
    begin
-      if Rally.Active and then Rally.Finished_Stage then
+      if Championship.Active and then Championship.Finished_Round then
+         if Championship.Is_Last then
+            Championship.Active := False;
+            To_Menu;
+         else
+            Championship.Next_Round;
+            Begin_Drive;
+         end if;
+      elsif Rally.Active and then Rally.Finished_Stage then
          if Rally.Is_Last then
             Rally.Active := False;
             To_Menu;
@@ -943,12 +963,30 @@ package body App is
             end if;
          end;
       end if;
-      --  (for the automated checks) on to the next stage by itself
-      if Rally_Auto and then Rally.Active and then Rally.Finished_Stage then
+      --  A round of the season run: its points go on the table
+      if Championship.Active and then not In_Menu and then not Championship.Finished_Round then
+         declare
+            Prev, Cur : Sim_Loop.Frame;
+         begin
+            Sim_Loop.Latest (Prev, Cur);
+            if Cur.Race_Over then
+               Championship.Finish_Round;
+            end if;
+         end;
+      end if;
+      --  (for the automated checks) on to the next stage or round by itself
+      if Rally_Auto
+        and then ((Rally.Active and then Rally.Finished_Stage)
+                  or else (Championship.Active and then Championship.Finished_Round))
+      then
          Rally_Wait := Rally_Wait + 1;
          if Rally_Wait = 240 then
             Rally_Wait := 0;
-            if Rally.Is_Last then
+            if Championship.Active and then Championship.Is_Last then
+               Ada.Text_IO.Put_Line ("season done, behind the leader by"
+                                     & Championship.Leader_Gap'Image & " points");
+               Gtk.Main.Main_Quit;
+            elsif Rally.Active and then Rally.Is_Last then
                Ada.Text_IO.Put_Line ("rally done, position" & Rally.Position'Image);
                Gtk.Main.Main_Quit;
             else
@@ -1083,7 +1121,7 @@ package body App is
       Combo_Car.Set_Active (0);
       Add_Row ("Car", Combo_Car);
 
-      Make (Combo_Mode, "Mode", "Hot laps, against your ghost|Race against the AI|Driving school|Rally: every stage in turn");
+      Make (Combo_Mode, "Mode", "Hot laps, against your ghost|Race against the AI|Driving school|Rally: every stage in turn|Championship: a race at every circuit");
       Gtk_New (Combo_Lesson);
       for L in School.Lesson_Id loop
          Combo_Lesson.Append_Text (School.Title (L));

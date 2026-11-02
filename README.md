@@ -187,6 +187,9 @@ Mode *Rally* runs every stage in turn: Skovvej, Granbakken (tight, with hairpins
 (wide and fast). Your times add up against five crews whose pace follows the AI strength, and
 damage goes with you, half of it mended at each service.
 
+Mode *Championship* races at every circuit in turn, with points for the first eight places
+(25, 18, 15, 12, 10, 8, 6, 4) and the same named rivals all season.
+
 ## Your own roads
 
 Roads are text files in `tracks/`, read at start in the order of their names, so a new circuit

@@ -10,6 +10,7 @@ with Cairo.Surface;
 with Glib;
 with System;
 
+with Championship;
 with Hud_Layer;
 with Rally;
 with School;
@@ -430,7 +431,7 @@ package body Hud is
                            Color (0.85, 0.85, 0.88);
                         end if;
                         Text (Trim (P'Image) & "  "
-                              & (if I = 1 then "YOU" else "AI" & Trim (Natural'Image (I - 1)))
+                              & Championship.Driver_Name (I)
                               & "  L" & Trim (Natural'Image (F.Laps (I).Lap + 1)),
                               X + 12.0 * S, Y0 + 24.0 * S + 24.0 * S * Float (P), 15.0 * S);
                      end if;
@@ -622,6 +623,47 @@ package body Hud is
       end if;
 
       --  Stage over ----------------------------------------------------------
+      --  The season's table, after each round
+      if Championship.Active and then Championship.Finished_Round then
+         declare
+            T : constant Championship.Table := Championship.Standings;
+            PW : constant Float := 560.0 * S;
+            PX : constant Float := Cx - PW / 2.0;
+            PY : constant Float := H * 0.14;
+            RowH : constant Float := 32.0 * S;
+         begin
+            Panel (PX, PY, PW, 122.0 * S + RowH * Float (T'Length), 0.86);
+            Color (1.0, 0.85, 0.25);
+            Text ((if Championship.Is_Last then "CHAMPIONSHIP: FINAL TABLE"
+                   else "AFTER ROUND" & Positive'Image (Championship.Round_Number) & " OF"
+                        & Natural'Image (Championship.Round_Total)),
+                  Cx, PY + 34.0 * S, 22.0 * S, 0.5);
+            Color (0.7, 0.7, 0.74);
+            Text ("POINTS   THIS RACE", PX + PW - 26.0 * S, PY + 58.0 * S, 12.0 * S, 1.0);
+            for R in T'Range loop
+               declare
+                  E : Championship.Entry_Line renames T (R);
+                  Y : constant Float := PY + 84.0 * S + RowH * Float (R - T'First);
+               begin
+                  if E.Car = 1 then
+                     Color (0.45, 1.0, 0.55);
+                  else
+                     Color (0.92, 0.92, 0.95);
+                  end if;
+                  Text (Trim (Positive'Image (R)) & ". " & Championship.Driver_Name (E.Car),
+                        PX + 26.0 * S, Y, 18.0 * S);
+                  Text (Trim (Natural'Image (E.Points)), PX + PW - 150.0 * S, Y, 18.0 * S, 1.0);
+                  Text ("P" & Trim (Natural'Image (E.Place)) & "  +" & Trim (Natural'Image (E.Last)),
+                        PX + PW - 26.0 * S, Y, 15.0 * S, 1.0);
+               end;
+            end loop;
+            Color (0.8, 0.8, 0.84);
+            Text ((if Championship.Is_Last then "X / Enter: back to the menu"
+                   else "X / Enter: to the next round"),
+                  Cx, PY + 102.0 * S + RowH * Float (T'Length), 15.0 * S, 0.5);
+         end;
+      end if;
+
       --  The rally's table, at the end of each stage
       if Rally.Active and then Rally.Finished_Stage then
          declare

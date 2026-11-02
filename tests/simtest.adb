@@ -13,6 +13,7 @@ with Ada.Numerics.Elementary_Functions;
 with Ada.Strings.Fixed;
 with Ada.Text_IO;
 
+with Championship;
 with Codriver;
 with Rally;
 with School;
@@ -1185,6 +1186,49 @@ procedure Simtest is
       end;
    end Road_Files;
 
+   --  A season, every round raced by the AI in all the cars
+   procedure Season is
+      R : Session.Settings := Hotlap (Race_GT3);
+      N : Vehicle.Inputs;
+      Total : Natural := 0;
+   begin
+      R.Mode := Session.Race;
+      R.Opponents := 3;
+      R.Laps := 1;
+      Championship.Begin_Season (R.Opponents + 1);
+      Check (Championship.Round_Total >= 4, "a season has" & Championship.Round_Total'Image & " rounds");
+      for Round in 1 .. Championship.Round_Total loop
+         Track.Load (Championship.Current_Road);
+         Check (not Track.Is_Stage, "round" & Round'Image & " is a circuit");
+         Session.Force_AI := True;
+         Session.Start (R);
+         for I in 1 .. 900_000 loop
+            Session.Step (N);
+            exit when Session.Race_Over;
+         end loop;
+         Check (Session.Race_Over, Track.Name (Championship.Current_Road) & " raced");
+         Championship.Finish_Round;
+         Championship.Finish_Round;   --  (twice: counted once)
+         if Round < Championship.Round_Total then
+            Championship.Next_Round;
+         end if;
+      end loop;
+      Session.Force_AI := False;
+      declare
+         T : constant Championship.Table := Championship.Standings;
+      begin
+         for E of T loop
+            Total := Total + E.Points;
+         end loop;
+         Check (Total = Championship.Round_Total * (25 + 18 + 15 + 12),
+                "every round gave out its points, once:" & Total'Image);
+         Check (T (T'First).Points >= T (T'Last).Points, "the table is in order");
+         Put_Line ("    champion " & Championship.Driver_Name (T (T'First).Car)
+                   & T (T'First).Points'Image & " points");
+      end;
+      Championship.Active := False;
+   end Season;
+
    --  A rally from end to end, the AI driving, damage going along
    procedure Rally_Event is
       R : Session.Settings := Hotlap (Rally_4WD);
@@ -1561,6 +1605,7 @@ begin
    Road_Files;
    Street_Circuit;
    Rally_Event;
+   Season;
    Spoken_Notes;
    Conditions;
    Lessons;
