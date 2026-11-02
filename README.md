@@ -160,6 +160,7 @@ The AI rides it too, round every circuit and stage.
 | | | H | panels |
 | | | L | driving line |
 | | | B | co-driver's voice |
+| D-pad down | D-pad down | M | mark a moment that felt wrong (see [Telemetry](#telemetry-and-tuning)) |
 | Square | Click the left stick | R | back on the track (the lap is lost; +15 s on a stage) |
 | + / - or dial | | + / - | force feedback strength |
 | R3 (press again for the front) | Click the right stick | W (hold) | look back |
@@ -197,6 +198,11 @@ Every drive is logged at 100 Hz and written as CSV when it ends, to
 `~/.local/share/adarace/telemetry/` (the newest 20 files are kept). It holds
 inputs, speed, slip, tyre loads and temperatures, steering torque and the force
 sent to the wheel.
+
+**Something felt wrong?** Press **M**, or down on the d-pad, at that moment. The game says
+"Mark 1 noted", and that moment is numbered in the file's `mark` column. Describe each mark
+in an issue ("mark 2: the bike fell for no reason in the hairpin") and attach the file.
+Then the exact speeds, inputs and grip at that moment are there to look at.
 
 `bin/catch` (built by `make test`) measures how forgiving slides are: a simulated
 driver with a 0.2 s reaction time overcooks a corner and countersteers. Handling

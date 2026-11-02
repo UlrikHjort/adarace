@@ -33,10 +33,23 @@ package body Telemetry is
       Slide, Fz, Temp, Wear : Quad;
       Fuel, Dmg_Aero, Dmg_Engine, Toe : Float;
       Tc, Abs_On, Off_Road : Boolean;
+      Roll, Pitch : Float;
+      Handbrake, Fallen : Boolean;
+      Mark : Natural;
    end record;
 
    type Rows is array (1 .. Capacity) of Row;
    type Rows_Access is access Rows;
+
+   --  Asked for by the window, taken by the simulation's next sample
+   Marks_Asked : Natural := 0 with Atomic;
+   Marks_Taken : Natural := 0 with Atomic;
+
+   function Mark return Positive is
+   begin
+      Marks_Asked := Marks_Asked + 1;
+      return Marks_Asked;
+   end Mark;
 
    Data : Rows_Access;
    Used : Natural := 0;
@@ -87,6 +100,15 @@ package body Telemetry is
       R.Tc := C.Tc_Active;
       R.Abs_On := C.Abs_Active;
       R.Off_Road := Off;
+      R.Roll := C.Roll;
+      R.Pitch := C.Pitch;
+      R.Handbrake := I.Handbrake;
+      R.Fallen := C.Fallen_T > 0.0;
+      R.Mark := 0;
+      if Marks_Taken < Marks_Asked then
+         Marks_Taken := Marks_Taken + 1;
+         R.Mark := Marks_Taken;
+      end if;
       Used := Used + 1;
       Data (Used) := R;
    end Sample;
@@ -157,7 +179,8 @@ package body Telemetry is
          Create (F, Out_File, Name);
          Put_Line (F, "t,lap,lap_time,s,x,z,speed,vx,vy,rate,steer,throttle,brake,clutch,gear,"
                    & "rpm,ax,ay,rack,force,slide_fl,slide_fr,slide_rl,slide_rr,"
-                   & "fz_fl,fz_fr,fz_rl,fz_rr,temp_fl,temp_fr,temp_rl,temp_rr,wear_fl,wear_fr,wear_rl,wear_rr,fuel,dmg_aero,dmg_engine,toe,tc,abs,off_road");
+                   & "fz_fl,fz_fr,fz_rl,fz_rr,temp_fl,temp_fr,temp_rl,temp_rr,wear_fl,wear_fr,wear_rl,wear_rr,fuel,dmg_aero,dmg_engine,toe,tc,abs,off_road,"
+                   & "roll,pitch,handbrake,fallen,mark");
          for K in 1 .. Used loop
             declare
                R : Row renames Data (K);
@@ -182,13 +205,17 @@ package body Telemetry is
                end loop;
                Put (F, "," & N (R.Fuel) & "," & N (R.Dmg_Aero) & "," & N (R.Dmg_Engine)
                     & "," & N (R.Toe));
-               Put_Line (F, "," & B (R.Tc) & "," & B (R.Abs_On) & "," & B (R.Off_Road));
+               Put_Line (F, "," & B (R.Tc) & "," & B (R.Abs_On) & "," & B (R.Off_Road)
+                         & "," & N (R.Roll) & "," & N (R.Pitch) & "," & B (R.Handbrake)
+                         & "," & B (R.Fallen) & "," & R.Mark'Image);
             end;
          end loop;
          Close (F);
          Written := To_Unbounded_String (Name);
       end;
       Used := 0;
+      Marks_Asked := 0;
+      Marks_Taken := 0;
       Prune;
    exception
       when E : others =>

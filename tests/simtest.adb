@@ -598,6 +598,7 @@ procedure Simtest is
       Lap_T : Float;
       Lines : Natural := 0;
       Check_Grid : Boolean := False;
+      Marks, Mark_Line : Natural := 0;
    begin
       Track.Load (Track.Track_Id'First);
       Session.Start (S);
@@ -612,6 +613,9 @@ procedure Simtest is
             N.Throttle := 0.5;
          end if;
          if I mod 10 = 0 then
+            if I = 50_000 or else I = 90_000 then
+               Marks := Telemetry.Mark;   --  "this felt wrong"
+            end if;
             Telemetry.Sample (N, 0.1);
          end if;
          exit when Session.Laps (1).Lap >= 1;
@@ -628,13 +632,21 @@ procedure Simtest is
          begin
             Open (F, In_File, Telemetry.Last_File);
             while not End_Of_File (F) loop
-               Skip_Line (F);
-               Lines := Lines + 1;
+               declare
+                  L : constant String := Get_Line (F);
+               begin
+                  Lines := Lines + 1;
+                  if L'Length > 3 and then L (L'Last - 2 .. L'Last) = ", 2" then
+                     Mark_Line := Lines;
+                  end if;
+               end;
             end loop;
             Close (F);
          end;
       end if;
       Check (Lines > 5000, "the telemetry holds the lap:" & Lines'Image & " lines");
+      Check (Marks = 2 and then Mark_Line in 8000 .. 10000,
+             "a marked moment is found in it: mark 2 on line" & Mark_Line'Image);
       Session.Start (S);
       Check (abs (Session.Laps (1).Best_Time - Lap_T) < 0.001,
              "the best lap comes back at the next sitting");

@@ -55,6 +55,7 @@ with School;
 with Scenery;
 with Session;
 with Sim_Loop;
+with Telemetry;
 with Track;
 with Vehicle;
 with Wheel;
@@ -144,6 +145,14 @@ package body App is
       Message := To_Unbounded_String (S);
       Message_Until := Sim_Loop.Now + Seconds;
    end Say;
+
+   --  "This felt wrong": numbered in the telemetry, for telling about it later
+   procedure Mark_Moment is
+      N : constant Positive := Telemetry.Mark;
+      Img : constant String := N'Image;
+   begin
+      Say ("Mark" & Img & " noted", 2.0);
+   end Mark_Moment;
 
    ---------------------------------------------------------------------------
    --  Remembered choices, in ~/.adaracerc
@@ -665,6 +674,7 @@ package body App is
       elsif K = GDK_F9 then
          Want_Record := True;
       elsif K = GDK_LC_c then Next_Camera;
+      elsif K = GDK_LC_m then Mark_Moment;
       elsif K = GDK_LC_l then
          Options.Guide := not Options.Guide;
          Say ((if Options.Guide then "Driving line on" else "Driving line off"), 1.5);
@@ -798,6 +808,7 @@ package body App is
                when Plus | Dial_Right => Change_FFB (5.0);
                when Minus | Dial_Left => Change_FFB (-5.0);
                when R3 => Toggle_Look_Back;
+               when Pad_Down => Mark_Moment;
                when others => null;
             end case;
          end if;
