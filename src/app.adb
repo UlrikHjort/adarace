@@ -859,7 +859,8 @@ package body App is
                       when Vehicle.Race_GT3 => Audio.V10,
                       when Vehicle.Rally_4WD => Audio.Turbo_Four,
                       when Vehicle.Classic_RWD => Audio.Old_Four,
-                      when Vehicle.Hyper_AWD => Audio.V10);
+                      when Vehicle.Hyper_AWD => Audio.V10,
+                      when Vehicle.Sport_Bike => Audio.Bike_Four);
       P.Rain := Track.Wet * (if Session.Config.Weather = Session.Rain then 1.0 else 0.0);
       P.Snowy := Track.Snow > 0.5;
       P.Wipers := Session.Config.Weather in Session.Rain | Session.Snowing;

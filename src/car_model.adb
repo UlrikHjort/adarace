@@ -105,6 +105,8 @@ package body Car_Model is
             end if;
             S.Roof_W := S.Roof_W - 0.04;
             S.Bottom := S.Bottom - 0.05;
+         when Sport_Bike =>
+            null;   --  (not lofted)
          when Rally_4WD =>
             S.W := S.W * 0.97 + 0.05 * (Near (-Sp.A, 0.55) + Near (Sp.B, 0.55));
             if Z > 0.25 then
@@ -447,6 +449,8 @@ package body Car_Model is
             Box (B, (-0.55, 0.88, 2.1), (-0.5, 1.24, 2.22), (0.03, 0.03, 0.035));
             Box (B, (0.5, 0.88, 2.1), (0.55, 1.24, 2.22), (0.03, 0.03, 0.035));
             Box (B, (-0.7, 0.2, 2.1), (0.7, 0.29, 2.36), Black);
+         when Sport_Bike =>
+            null;
       end case;
    end Loft;
 
@@ -660,6 +664,150 @@ package body Car_Model is
       Box (B, (-0.17, -0.02, -0.04), (-0.07, 0.05, -0.03), (0.5, 0.5, 0.52), Metal);
    end Steering_Wheel;
 
+   ---------------------------------------------------------------------------
+   --  The motorcycle and its rider
+   ---------------------------------------------------------------------------
+
+   --  A box from one point to another, Half wide and high
+   procedure Strut (B : in out Builder; P0, P1 : Vec3; Half : Float; Col : Color;
+                    Mat : Float := Plain)
+   is
+      D : constant Vec3 := (P1.X - P0.X, P1.Y - P0.Y, P1.Z - P0.Z);
+      L : constant Float := Sqrt (D.X * D.X + D.Y * D.Y + D.Z * D.Z);
+      U : constant Vec3 := (D.X / L, D.Y / L, D.Z / L);
+      Side : constant Vec3 := (if abs U.X > 0.9 then (0.0, 1.0, 0.0) else (1.0, 0.0, 0.0));
+      --  up: across the strut, in the plane away from Side
+      Up0 : constant Vec3 :=
+        (U.Y * Side.Z - U.Z * Side.Y, U.Z * Side.X - U.X * Side.Z, U.X * Side.Y - U.Y * Side.X);
+   begin
+      Oriented_Box (B, ((P0.X + P1.X) / 2.0, (P0.Y + P1.Y) / 2.0, (P0.Z + P1.Z) / 2.0),
+                    U, Up0, L / 2.0, Half, Half, Col, Mat);
+   end Strut;
+
+   procedure Bike_Body (B : in out Builder) is
+      Sp : constant Spec := Spec_Of (Sport_Bike);
+      Front_Z : constant Float := -Sp.A;
+      Rear_Z : constant Float := Sp.B;
+      R : constant Float := Sp.Radius;
+      Black : constant Color := (0.02, 0.02, 0.025);
+      Dark : constant Color := (0.06, 0.06, 0.065);
+      Steel : constant Color := (0.45, 0.46, 0.48);
+      None : constant Color := (0.0, 0.0, 0.0);
+      Leather : constant Color := (0.05, 0.05, 0.06);
+      Stripe : constant Color := (0.85, 0.85, 0.86);
+      Helmet : constant Color := (0.92, 0.92, 0.93);
+      Head_Top : constant Vec3 := (0.0, 0.88, -0.56);   --  the steering head
+      Pivot : constant Vec3 := (0.0, 0.46, 0.22);       --  the swingarm's
+   begin
+      --  Forks, raked back from the front axle to the steering head
+      for Sg in 0 .. 1 loop
+         declare
+            X : constant Float := (if Sg = 0 then -0.08 else 0.08);
+         begin
+            Strut (B, (X, R, Front_Z), (X, Head_Top.Y, Head_Top.Z + 0.02), 0.022, Steel, Metal);
+            Strut (B, (X, R, Front_Z), (X, R + 0.32, Front_Z + 0.10), 0.03, (0.75, 0.6, 0.15), Metal);
+            --  Brake discs either side of the hub
+            Box (B, (X * 0.8 - 0.004, R - 0.15, Front_Z - 0.15),
+                 (X * 0.8 + 0.004, R + 0.15, Front_Z + 0.15), Steel, Metal);
+         end;
+      end loop;
+      Box (B, (-0.10, 0.80, -0.62), (0.10, 0.84, -0.50), Dark);   --  triple clamp
+      --  The frame from the head down to the pivot, and the swingarm
+      for Sg in 0 .. 1 loop
+         declare
+            X : constant Float := (if Sg = 0 then -0.12 else 0.12);
+         begin
+            Strut (B, (X * 0.6, Head_Top.Y - 0.04, Head_Top.Z), (X, Pivot.Y + 0.1, Pivot.Z - 0.05), 0.035, Steel, Metal);
+            Strut (B, (X, Pivot.Y, Pivot.Z), (X * 0.8, R, Rear_Z), 0.03, Dark, Metal);
+         end;
+      end loop;
+      Box (B, (-0.05, R - 0.08, Rear_Z - 0.08), (0.05, R + 0.08, Rear_Z + 0.08), Dark);
+      --  The engine, and the exhaust running back under the seat
+      Box (B, (-0.17, 0.22, -0.42), (0.17, 0.62, 0.12), Black);
+      Box (B, (-0.19, 0.30, -0.35), (0.19, 0.48, -0.05), Dark, Metal);
+      Strut (B, (0.0, 0.24, -0.40), (0.14, 0.28, 0.25), 0.04, Steel, Metal);
+      Strut (B, (0.14, 0.28, 0.25), (0.16, 0.50, 0.68), 0.06, Steel, Metal);
+
+      --  Bodywork: the nose, its lamp and screen, the sides, tank, seat, tail
+      Box (B, (-0.15, 0.62, -0.88), (0.15, 0.90, -0.56), None, Mesh.Paint);
+      Box (B, (-0.09, 0.66, -0.895), (0.09, 0.74, -0.88), (0.9, 0.92, 1.0), Glow);
+      Oriented_Box (B, (0.0, 1.0, -0.79), (0.0, 0.7, 0.7), (0.0, 0.7, -0.7), 0.13, 0.006, 0.12,
+                    (0.1, 0.12, 0.14), Mesh.Glass);
+      Box (B, (-0.21, 0.36, -0.62), (0.21, 0.78, -0.18), None, Mesh.Paint);
+      Box (B, (-0.18, 0.18, -0.50), (0.18, 0.30, 0.0), None, Mesh.Paint);
+      Box (B, (-0.18, 0.78, -0.48), (0.18, 0.98, -0.04), None, Mesh.Paint);
+      Box (B, (-0.14, 0.82, -0.04), (0.14, 0.88, 0.32), Black);
+      Strut (B, (0.0, 0.88, 0.28), (0.0, 0.98, 0.70), 0.10, None, Mesh.Paint);
+      Box (B, (-0.08, 0.90, 0.70), (0.08, 0.96, 0.73), (0.8, 0.02, 0.02), Lamp);
+      Box (B, (-0.07, 0.70, 0.72), (0.07, 0.82, 0.74), Dark);   --  plate holder
+      --  Mudguard over the front tyre
+      Box (B, (-0.07, R + 0.30, Front_Z - 0.18), (0.07, R + 0.34, Front_Z + 0.15), None, Mesh.Paint);
+      --  Clip-on bars
+      Box (B, (-0.30, Bars_Y - 0.02, Bars_Z - 0.02), (0.30, Bars_Y + 0.02, Bars_Z + 0.02), Black);
+
+      --  The rider, tucked in
+      declare
+         Hip : constant Vec3 := (0.0, 0.98, 0.16);
+         Shoulder : constant Vec3 := (0.0, 1.12, -0.20);
+      begin
+         Strut (B, Hip, Shoulder, 0.17, Leather);
+         Strut (B, (0.0, Hip.Y + 0.03, Hip.Z - 0.02), (0.0, Shoulder.Y + 0.03, Shoulder.Z - 0.02), 0.06, Stripe);
+         Box (B, (-0.13, 1.10, -0.44), (0.13, 1.34, -0.16), Helmet);
+         Box (B, (-0.11, 1.18, -0.445), (0.11, 1.26, -0.43), (0.03, 0.03, 0.04), Mesh.Glass);
+         for Sg in 0 .. 1 loop
+            declare
+               X : constant Float := (if Sg = 0 then -1.0 else 1.0);
+               Elbow : constant Vec3 := (X * 0.27, 1.00, -0.34);
+               Knee : constant Vec3 := (X * 0.21, 0.82, -0.26);
+               Foot : constant Vec3 := (X * 0.17, 0.42, 0.18);
+            begin
+               Strut (B, (X * 0.16, Shoulder.Y - 0.02, Shoulder.Z + 0.02), Elbow, 0.05, Leather);
+               Strut (B, Elbow, (X * 0.26, Bars_Y, Bars_Z), 0.045, Leather);
+               Box (B, (X * 0.26 - 0.04, Bars_Y - 0.03, Bars_Z - 0.04),
+                    (X * 0.26 + 0.04, Bars_Y + 0.04, Bars_Z + 0.03), Black);
+               Strut (B, (X * 0.12, Hip.Y - 0.06, Hip.Z), Knee, 0.075, Leather);
+               Strut (B, Knee, Foot, 0.06, Leather);
+               Box (B, (X * 0.17 - 0.05, 0.38, 0.12), (X * 0.17 + 0.05, 0.47, 0.30), Black);
+            end;
+         end loop;
+      end;
+   end Bike_Body;
+
+   --  What the rider sees: the top of the screen, the dash, the bars
+   procedure Bike_Cockpit (B : in out Builder) is
+      Dash : constant Color := (0.03, 0.03, 0.032);
+      N : constant Vec3 := (0.0, 0.5, 0.86);
+      procedure Dial (X0, Y0, Half, Which : Float) is
+         Z : constant Float := -0.64;
+         Lo_L : constant Vec3 := (X0 - Half, Y0 - Half, Z + Half * 0.6);
+         Lo_R : constant Vec3 := (X0 + Half, Y0 - Half, Z + Half * 0.6);
+         Hi_R : constant Vec3 := (X0 + Half, Y0 + Half, Z - Half * 0.6);
+         Hi_L : constant Vec3 := (X0 - Half, Y0 + Half, Z - Half * 0.6);
+      begin
+         Add (B, (Lo_L, N, Which, 0.0, 0.0, Mesh.Dial, 0.0, 0.0));
+         Add (B, (Lo_R, N, Which, 0.0, 0.0, Mesh.Dial, 1.0, 0.0));
+         Add (B, (Hi_R, N, Which, 0.0, 0.0, Mesh.Dial, 1.0, 1.0));
+         Add (B, (Lo_L, N, Which, 0.0, 0.0, Mesh.Dial, 0.0, 0.0));
+         Add (B, (Hi_R, N, Which, 0.0, 0.0, Mesh.Dial, 1.0, 1.0));
+         Add (B, (Hi_L, N, Which, 0.0, 0.0, Mesh.Dial, 0.0, 1.0));
+      end Dial;
+   begin
+      Box (B, (-0.13, 0.94, -0.72), (0.13, 1.03, -0.58), Dash);
+      Dial (-0.05, 1.075, 0.04, 0.0);
+      Dial (0.05, 1.075, 0.04, 1.0);
+      Dial (0.0, 1.05, 0.018, 2.0);
+   end Bike_Cockpit;
+
+   --  The bars turn with the front wheel: round Y, at the steering head
+   procedure Bike_Bars (B : in out Builder) is
+      Black : constant Color := (0.02, 0.02, 0.025);
+   begin
+      Box (B, (-0.30, -0.02, -0.02), (0.30, 0.02, 0.02), Black);
+      Box (B, (-0.33, -0.03, -0.03), (-0.20, 0.03, 0.03), (0.08, 0.08, 0.09));
+      Box (B, (0.20, -0.03, -0.03), (0.33, 0.03, 0.03), (0.08, 0.08, 0.09));
+      Box (B, (0.12, 0.02, -0.10), (0.15, 0.03, -0.02), (0.5, 0.5, 0.52), Metal);   --  the lever
+   end Bike_Bars;
+
    procedure Build is
    begin
       for K in Car_Kind loop
@@ -667,12 +815,19 @@ package body Car_Model is
             S : constant Spec := Spec_Of (K);
             Body_B, Wheel_B, Cock_B, Steer_B : Builder;
          begin
-            Loft (Body_B, K);
-            Wheel (Wheel_B, S.Radius, (case K is when Race_GT3 | Hyper_AWD => 0.30,
-                                                  when Classic_RWD => 0.19,
-                                                  when others => 0.26));
-            Cockpit (Cock_B, K);
-            Steering_Wheel (Steer_B, K);
+            if Is_Bike (K) then
+               Bike_Body (Body_B);
+               Wheel (Wheel_B, S.Radius, 0.17);
+               Bike_Cockpit (Cock_B);
+               Bike_Bars (Steer_B);
+            else
+               Loft (Body_B, K);
+               Wheel (Wheel_B, S.Radius, (case K is when Race_GT3 | Hyper_AWD => 0.30,
+                                                     when Classic_RWD => 0.19,
+                                                     when others => 0.26));
+               Cockpit (Cock_B, K);
+               Steering_Wheel (Steer_B, K);
+            end if;
             Meshes (K) := (Upload (Body_B), Upload (Wheel_B), Upload (Cock_B), Upload (Steer_B));
          end;
       end loop;

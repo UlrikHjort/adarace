@@ -258,6 +258,118 @@ procedure Simtest is
    end Straight;
 
    ---------------------------------------------------------------------------
+   --  The motorcycle: it leans to turn, and falls when asked too much
+
+   procedure Motorcycle is
+      K : constant Car_Kind := Sport_Bike;
+      S : constant Spec := Spec_Of (K);
+      A : constant Assists := (Abs_On => True, Tc_On => True, Mode => Automatic, others => <>);
+      Raw : constant Assists := (Abs_On => False, Tc_On => False, Mode => Automatic, others => <>);
+      C : Car;
+      N : Vehicle.Inputs;
+      Home_X, Home_Z : Long_Float := 0.0;
+
+      --  A step, kept on the same spot of asphalt: only the motion matters
+      procedure Ride (With_Assists : Assists) is
+      begin
+         Vehicle.Step (C, S, N, With_Assists);
+         C.X := Home_X;
+         C.Z := Home_Z;
+      end Ride;
+
+      --  On the speedway's start, rolling at a speed, in a sensible gear
+      procedure Fresh (Kmh : Float) is
+         A0 : Track.Sample renames Track.Samples (0);
+      begin
+         Vehicle.Place (C, K, A0.X, A0.Z, Arctan (A0.TX, -A0.TZ));
+         C.Vx := Kmh / 3.6;
+         C.Gear := Integer'Max (1, Integer'Min (6, Integer (Kmh / 40.0)));
+         N := (others => <>);
+         Home_X := C.X;
+         Home_Z := C.Z;
+      end Fresh;
+   begin
+      Track.Load (1);
+      Session.Start (Hotlap (K));
+
+      --  A steady turn: the lean the physics asks for, tan(lean) = v^2 / (g R)
+      Fresh (60.0);
+      N.Steer := 0.06;
+      N.Throttle := 0.25;
+      for I in 1 .. 4000 loop
+         Ride (A);
+      end loop;
+      declare
+         V : constant Float := C.Vx;
+         Radius : constant Float := V / Float'Max (0.001, abs C.Rate);
+         Want : constant Float := Arctan (V * V / (9.81 * Radius));
+      begin
+         Put_Line ("  bike at " & Img (V * 3.6, 0) & " km/h on a " & Img (Radius, 0)
+                   & " m radius leans " & Img (abs C.Roll * 57.3, 1) & " deg (physics: "
+                   & Img (Want * 57.3, 1) & ")");
+         Check (abs (abs C.Roll - Want) < 0.03 and then C.Fallen_T = 0.0,
+                "a motorcycle leans into a turn as far as the turn needs");
+         Check (C.Roll < 0.0 and then C.Rate > 0.0,
+                "turning right, it leans to the right");
+      end;
+
+      --  Grabbing the front brake hard at full lean, without ABS: down it goes
+      Fresh (90.0);
+      N.Steer := 1.0;
+      for I in 1 .. 2500 loop
+         Ride (Raw);
+      end loop;
+      Put_Line ("  full lean at " & Img (C.Vx * 3.6, 0) & " km/h: " & Img (abs C.Roll * 57.3, 1) & " deg");
+      Check (C.Fallen_T = 0.0 and then abs C.Roll > 0.6,
+             "it holds a full lean on a steady throttle");
+      N.Brake := 1.0;
+      for I in 1 .. 1500 loop
+         Ride (Raw);
+      end loop;
+      Check (C.Fallen_T > 0.0, "a hard brake at full lean without ABS throws it down");
+
+      --  Full throttle in first without the anti-wheelie: the front comes up
+      Fresh (90.0);
+      C.Gear := 1;
+      N.Throttle := 1.0;
+      declare
+         Most : Float := 0.0;
+      begin
+         for I in 1 .. 600 loop
+            Ride (Raw);
+            Most := Float'Max (Most, C.Pitch);
+         end loop;
+         Put_Line ("  wheelie: " & Img (Most * 57.3, 1) & " deg");
+         Check (Most > 0.08, "full power in first lifts the front wheel");
+         Fresh (90.0);
+         C.Gear := 1;
+         N.Throttle := 1.0;
+         Most := 0.0;
+         for I in 1 .. 600 loop
+            Ride (A);
+            Most := Float'Max (Most, C.Pitch);
+         end loop;
+         Check (Most < 0.08, "the anti-wheelie keeps it down: " & Img (Most * 57.3, 1) & " deg");
+      end;
+
+      --  In a session: down, and back on the road a few seconds later
+      Session.Start (Hotlap (K));
+      Session.Cars (1).Vx := 20.0;
+      Session.Cars (1).Fallen_T := 0.001;
+      declare
+         Was_Down : Boolean := False;
+      begin
+         for I in 1 .. 6000 loop
+            Session.Step ((others => <>));
+            Was_Down := Was_Down or else Session.Cars (1).Fallen_T > 2.0;
+         end loop;
+         Check (Was_Down and then Session.Cars (1).Fallen_T = 0.0
+                and then abs Session.Cars (1).Roll < 0.1,
+                "a fallen rider is picked up and put back on the road");
+      end;
+   end Motorcycle;
+
+   ---------------------------------------------------------------------------
 
    function Saved_By_Demo return Boolean is
      (Ada.Directories.Exists (Session.Save_Name));
@@ -267,8 +379,8 @@ procedure Simtest is
       N : Vehicle.Inputs;
       Max_Lat, Max_V : Float := 0.0;
       Max_Temp : Float := 0.0;
-      Off_Count, Hits : Natural := 0;
-      Was_Off : Boolean := False;
+      Off_Count, Hits, Falls : Natural := 0;
+      Was_Off, Was_Down : Boolean := False;
       Laps_Done : Natural := 0;
    begin
       S.Mode := Session.Demo;
@@ -299,6 +411,12 @@ procedure Simtest is
                if C.Impact > 1.0 then
                   Hits := Hits + 1;
                end if;
+               if C.Fallen_T > 0.0 and then not Was_Down then
+                  Falls := Falls + 1;
+                  Put_Line ("    fell at s=" & Img (Track.Samples (C.Hint).S, 0) & " v="
+                            & Img (C.Vx * 3.6, 0) & " lean=" & Img (C.Roll * 57.3, 0));
+               end if;
+               Was_Down := C.Fallen_T > 0.0;
             end if;
             Was_Off := Off;
          end;
@@ -314,6 +432,9 @@ procedure Simtest is
              "laps by the AI are not saved as records");
       Check (Off_Count = 0, "the AI stays on the circuit");
       Check (Hits < 50, "the AI keeps off the barriers");
+      if Is_Bike (K) then
+         Check (Falls = 0, "the AI rider stays on");
+      end if;
    end AI_Lap;
 
    --  What the player's hands and feet do
@@ -1786,6 +1907,17 @@ begin
    if Ada.Directories.Exists (Ada.Environment_Variables.Value ("HOME")) then
       Ada.Directories.Delete_Tree (Ada.Environment_Variables.Value ("HOME"));
    end if;
+   --  ADARACE_ONLY=bike: just the motorcycle, while tuning it
+   if Ada.Environment_Variables.Value ("ADARACE_ONLY", "") = "bike" then
+      Straight (Sport_Bike);
+      Motorcycle;
+      Wear_And_Fuel (Sport_Bike);
+      for T in 1 .. Track.Track_Count loop
+         AI_Lap (T, Sport_Bike);
+      end loop;
+      Put_Line (if Failed = 0 then "All passed" else Failed'Image & " FAILED");
+      return;
+   end if;
    for T in 1 .. Track.Track_Count loop
       Track_Shape (T);
    end loop;
@@ -1793,6 +1925,7 @@ begin
    for K in Car_Kind loop
       Straight (K);
    end loop;
+   Motorcycle;
    for T in 1 .. Track.Track_Count loop
       for K in Car_Kind loop
          AI_Lap (T, K);

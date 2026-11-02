@@ -354,11 +354,11 @@ package body Audio is
                   --  between its banks, the V10 screams clean and high, the
                   --  turbo four is a flat, hard drone with the blower over it
                   Fire : constant Float :=
-                    (case P.Engine is when V8 => 4.0, when V10 => 5.0, when Turbo_Four | Old_Four => 2.0);
+                    (case P.Engine is when V8 => 4.0, when V10 => 5.0, when Turbo_Four | Old_Four | Bike_Four => 2.0);
                   Uneven : constant Float :=
-                    (case P.Engine is when V8 => 1.0, when V10 => 0.15, when Turbo_Four => 0.4, when Old_Four => 0.7);
+                    (case P.Engine is when V8 => 1.0, when V10 => 0.15, when Turbo_Four => 0.4, when Old_Four => 0.7, when Bike_Four => 0.05);
                   Hard : constant Float :=
-                    (case P.Engine is when V8 => 0.18, when V10 => 0.55, when Turbo_Four => 0.42, when Old_Four => 0.3);
+                    (case P.Engine is when V8 => 0.18, when V10 => 0.55, when Turbo_Four => 0.42, when Old_Four => 0.3, when Bike_Four => 0.65);
                   Phase_Firing : constant Float := Crank * Fire;
                   Pulse : constant Float :=
                     Sin (Two_Pi * Phase_Firing)
@@ -373,7 +373,7 @@ package body Audio is
                   Raw : constant Float := (Pulse * Lump + Rough * 1.2) * (0.25 + 0.75 * Load_S);
                   --  The exhaust resonates; the note hardens with the revs
                   Pitch : constant Float :=
-                    (case P.Engine is when V8 => 1.0, when V10 => 1.5, when Turbo_Four => 0.85, when Old_Four => 1.1);
+                    (case P.Engine is when V8 => 1.0, when V10 => 1.5, when Turbo_Four => 0.85, when Old_Four => 1.1, when Bike_Four => 1.75);
                   Res1 : constant Float := Run (Exh1, Raw, (180.0 + Rpm_S * 0.05) * Pitch, 0.55);
                   Res2 : constant Float := Run (Exh2, Raw, (700.0 + Rpm_S * 0.18) * Pitch, 0.75);
                   Clip : constant Float :=

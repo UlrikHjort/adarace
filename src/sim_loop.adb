@@ -7,6 +7,7 @@ with Ada.Numerics.Elementary_Functions;
 with Ada.Real_Time;
 with Ada.Text_IO;
 
+with Gamepad;
 with Net;
 with Telemetry;
 with Track;
@@ -19,6 +20,7 @@ package body Sim_Loop is
    use type Vehicle.Car_Kind;
    use type Session.Mode_Kind;
    use type Net.Role;
+   use type Wheel.Button;
 
    Epoch : constant Time := Clock;
 
@@ -207,7 +209,8 @@ package body Sim_Loop is
                when Vehicle.Road_GT => 260.0,
                when Vehicle.Rally_4WD => 230.0,
                when Vehicle.Classic_RWD => 190.0,
-               when Vehicle.Hyper_AWD => 400.0);
+               when Vehicle.Hyper_AWD => 400.0,
+               when Vehicle.Sport_Bike => 100.0);
       begin
          --  The aligning torque of the tyres: goes light at the limit
          F := C.Rack / Norm;
@@ -257,6 +260,37 @@ package body Sim_Loop is
 
    Key_Steer_2, Key_Throttle_2, Key_Brake_2 : Float := 0.0;
 
+   --  The controller is the second player's when two drive, else the first's
+   function Pad_Is_Second return Boolean is
+     (Session.Config.Two_Players and then Gamepad.Present);
+
+   --  A stick to the steering: on a motorcycle at speed it asks for a share
+   --  of the lean the tyres allow; in a car it is limited, like the keys, to
+   --  what the tyres can use, with a little in hand to catch a slide
+   function From_Stick (Stick, V : Float) return Float is
+      S : Vehicle.Spec renames Session.Spec;
+      L : constant Float := S.A + S.B;
+   begin
+      if Vehicle.Is_Bike (Session.Config.Kind) then
+         declare
+            Lean : constant Float := Stick * Vehicle.Lean_Limit (S);
+            Kappa : constant Float := 9.81 * Tan (Lean) / Float'Max (6.0, V) ** 2;
+            At_Speed : constant Float := Arctan (Kappa * L) / (S.Steer_Lock * 0.5);
+            W : constant Float := Clamp ((V - 3.0) / 5.0, 0.0, 1.0);
+         begin
+            return W * At_Speed + (1.0 - W) * Stick;
+         end;
+      else
+         declare
+            Lock_At : constant Float :=
+              Clamp ((Arctan (0.12) + L * 9.81 * S.Mu * 0.9 / Float'Max (25.0, V * V))
+                     / S.Steer_Lock * 1.5, 0.15, 1.0);
+         begin
+            return Stick * Lock_At;
+         end;
+      end if;
+   end From_Stick;
+
    --  The second player's hands: the arrow keys when the first has the wheel,
    --  else W A S D
    procedure Gather_Second (Cycle : Float) is
@@ -279,6 +313,17 @@ package body Sim_Loop is
       Key_Brake_2 := Clamp (Key_Brake_2 + (if B then 4.0 else -9.0) * Cycle, 0.0, 1.0);
       Session.Second_Hands :=
         (Steer => Key_Steer_2, Throttle => Key_Throttle_2, Brake => Key_Brake_2, others => <>);
+      if Pad_Is_Second then
+         declare
+            P : constant Gamepad.Input := Gamepad.State;
+            H : Vehicle.Inputs renames Session.Second_Hands;
+         begin
+            H.Steer := Clamp (H.Steer + From_Stick (P.Steer, V), -1.0, 1.0);
+            H.Throttle := Float'Max (H.Throttle, P.Throttle);
+            H.Brake := Float'Max (H.Brake, P.Brake);
+            H.Handbrake := Gamepad.Held (Wheel.Square);
+         end;
+      end if;
    end Gather_Second;
 
    function Gather (Cycle : Float) return Vehicle.Inputs is
@@ -314,6 +359,18 @@ package body Sim_Loop is
       I.Clutch := Float'Max ((if On then W.Clutch else 0.0), Key_Clutch);
       I.Handbrake := K.Handbrake or else (On and then Wheel.Held (Wheel.L3));
       I.Lever := (if On then Integer (W.Shifter) else 0);
+      --  The controller: the stick, the triggers, X for the handbrake (on a
+      --  motorcycle the rear brake)
+      if Gamepad.Present and then not Pad_Is_Second then
+         declare
+            P : constant Gamepad.Input := Gamepad.State;
+         begin
+            I.Steer := Clamp (I.Steer + From_Stick (P.Steer, V), -1.0, 1.0);
+            I.Throttle := Float'Max (I.Throttle, P.Throttle);
+            I.Brake := Float'Max (I.Brake, P.Brake);
+            I.Handbrake := I.Handbrake or else Gamepad.Held (Wheel.Square);
+         end;
+      end if;
       Shared.Take_Shift (Up, Down);
       I.Shift_Up := Up;
       I.Shift_Down := Down;
@@ -447,6 +504,38 @@ package body Sim_Loop is
       return F;
    end Make_Frame;
 
+   --  The controller's motors: the heavy one for knocks, kerbs and a fall,
+   --  the light one for a sliding tyre and, on a motorcycle, the engine
+   Pad_Jolt : Float := 0.0;
+
+   procedure Pad_Rumble (Live : Boolean) is
+      Who : constant Positive := (if Pad_Is_Second then 2 else 1);
+   begin
+      if not Live or else Who > Session.Car_Count then
+         Gamepad.Rumble (0.0, 0.0);
+         return;
+      end if;
+      declare
+         C : Vehicle.Car renames Session.Cars (Who);
+         Moving : constant Float := Clamp (Vehicle.Speed (C) / 10.0, 0.0, 1.0);
+         Slide : Float := 0.0;
+         Kerb : Boolean := False;
+      begin
+         for W in Vehicle.Wheel_Id loop
+            Slide := Float'Max (Slide, C.Wheels (W).Slide);
+            Kerb := Kerb or else C.Wheels (W).Surf = Track.Kerb;
+         end loop;
+         Pad_Jolt := Float'Max (Pad_Jolt * 0.85, Clamp (C.Impact / 12.0, 0.0, 1.0));
+         Gamepad.Rumble
+           (Strong => Float'Max (Pad_Jolt, (if Kerb then 0.35 * Moving else 0.0))
+                      + (if C.Fallen_T > 0.0 and then C.Fallen_T < 0.6 then 0.8 else 0.0),
+            Weak => 0.55 * Clamp (Slide * 1.5, 0.0, 1.0) * Moving
+                    + (if Vehicle.Is_Bike (C.Kind)
+                       then 0.10 * C.Throttle_Eff * C.Rpm / Session.Spec.Red_Line
+                       else 0.0));
+      end;
+   end Pad_Rumble;
+
    task body Runner is
       Cycle : constant Time_Span := Milliseconds (2);
       Next : Time;
@@ -464,6 +553,7 @@ package body Sim_Loop is
       end select;
       if Have_Wheel then
          Wheel.Open;
+         Gamepad.Open;
       end if;
       Next := Clock;
       loop
@@ -502,6 +592,37 @@ package body Sim_Loop is
                   end loop;
                end;
                Shared.Set_Wheel (Wheel.Present, Wheel.State.Steering);
+               --  The controller's buttons: the same names; the bumpers shift,
+               --  unless the second player has it (an automatic gearbox)
+               Gamepad.Poll;
+               declare
+                  B : Wheel.Button;
+               begin
+                  while Gamepad.Next_Press (B) loop
+                     --  X is held for the handbrake while driving, so a click
+                     --  of the left stick puts the car back on the track
+                     if not Shared.Is_Paused and then B = Wheel.L3 then
+                        B := Wheel.Square;
+                     elsif not Shared.Is_Paused and then B = Wheel.Square then
+                        goto Next_Pad_Button;
+                     end if;
+                     case B is
+                        when Wheel.Paddle_Right =>
+                           if not Pad_Is_Second then
+                              Shared.Shift (True);
+                           end if;
+                        when Wheel.Paddle_Left =>
+                           if not Pad_Is_Second then
+                              Shared.Shift (False);
+                           end if;
+                        when others => null;
+                     end case;
+                     if not Pad_Is_Second or else B in Wheel.Options | Wheel.PS then
+                        Shared.Press (B);
+                     end if;
+                     <<Next_Pad_Button>>
+                  end loop;
+               end;
                declare
                   G : Float;
                   Changed : Boolean;
@@ -557,6 +678,10 @@ package body Sim_Loop is
                end if;
             end if;
 
+            if Have_Wheel and then Gamepad.Present and then Count mod 8 = 0 then
+               Pad_Rumble (Stepping and then not Shared.Is_Paused
+                           and then Session.Config.Mode /= Session.Demo);
+            end if;
             if Have_Wheel and then Wheel.Present and then Count mod 4 = 0 then
                Force_Feedback (Stepping and then not Shared.Is_Paused
                                and then Session.Config.Mode /= Session.Demo);
@@ -576,12 +701,16 @@ package body Sim_Loop is
       end loop;
       if Have_Wheel then
          Wheel.Shutdown;
+         Gamepad.Rumble (0.0, 0.0);
+         Gamepad.Close;
       end if;
    exception
       when E : others =>
          Ada.Text_IO.Put_Line ("Simulation stopped: " & Ada.Exceptions.Exception_Information (E));
          if Have_Wheel then
             Wheel.Shutdown;
+         Gamepad.Rumble (0.0, 0.0);
+         Gamepad.Close;
          end if;
    end Runner;
 

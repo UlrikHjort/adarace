@@ -1,8 +1,8 @@
 # AdaRace
 
 A driving simulator in Ada and GtkAda, in the spirit of Assetto Corsa, made for
-a Logitech G29 (the keyboard works too): circuits and a rally stage, a driving
-school, night, weather and seasons.
+a Logitech G29 (an Xbox controller or the keyboard work too): circuits and a rally stage, a
+motorcycle, a driving school, night, weather and seasons.
 
 > **Built with AI.** Nearly all of this project was written by
 > [Claude](https://www.anthropic.com/claude) Opus 5.5, Anthropic's AI model, working in
@@ -22,6 +22,8 @@ school, night, weather and seasons.
 | The driving school and its coloured line | Autumn at dawn |
 | ![The Hyper on Boulevard Royal at dusk](docs/screenshots/boulevard.jpg) | ![Two players, split screen](docs/screenshots/split-screen.jpg) |
 | The Hyper on Boulevard Royal, at dusk | Two players on one screen |
+| ![The motorcycle leaning into a corner](docs/screenshots/motorcycle.jpg) | ![The motorcycle from the helmet](docs/screenshots/motorcycle-helmet.jpg) |
+| The motorcycle, leaning into a corner | From the helmet, the horizon tilting with the bike |
 | ![A GT3 in the golden hour](docs/screenshots/gt3-golden.jpg) | ![Fog on the stage](docs/screenshots/rally-fog.jpg) |
 | A GT3 in the golden hour | Fog on the stage |
 | ![A lesson passed](docs/screenshots/lesson-passed.jpg) | ![The menu and car setup](docs/screenshots/menu.jpg) |
@@ -42,8 +44,8 @@ and how to install it. On Debian, Ubuntu and Mint:
 
     sudo apt install gnat gprbuild libgtkada-dev libgtk-3-dev libepoxy-dev libpulse-dev pkg-config
 
-The game needs a graphics card with OpenGL 4.5. A Logitech G29 is found by itself, and the
-keyboard always works. `ffmpeg` is optional, for F9 recordings and the co-driver's voice.
+The game needs a graphics card with OpenGL 4.5. A Logitech G29 and an Xbox controller are
+found by themselves, and the keyboard always works. `ffmpeg` is optional, for F9 recordings and the co-driver's voice.
 
 ## The co-driver's voice
 
@@ -106,7 +108,7 @@ Physics run at 1 kHz in an Ada task of their own, independent of the frame rate.
   Sent at 125 Hz.
 
 Five cars: a road GT, a GT3 with slicks and wings, a four wheel drive rally car, a light
-classic and a mid-engined hypercar. Five circuits: Søndersø Ring (4.9 km), Monte Ferro
+classic and a mid-engined hypercar, and a motorcycle (see below). Five circuits: Søndersø Ring (4.9 km), Monte Ferro
 (3.2 km, 64 m of climb), Kalvø Speedway (3.2 km, banked oval), the Havnebyen street circuit
 (2.8 km, between walls along a harbour) and the Boulevard Royal street circuit on real
 city streets (3.8 km), and three rally stages.
@@ -119,32 +121,58 @@ The cars have their own shapes: the GT3 low with flared arches, the R4 a tall ha
 From the cockpit, live gauges replace the speed panel. Bodywork crumples and scratches with
 damage, and collects mud, dust or road salt on loose ground, which rain washes off.
 
+## The motorcycle
+
+The Nordic 1000 R is a litre sports bike: 150 kW, 275 kg with its rider, on one track.
+It steers by leaning, as a real one does. The rider asks for a curve, and the bike rolls
+towards the lean that curve needs, tan(lean) = v² / (g·r), as fast as a bike can roll.
+It turns from that lean, not from the bars.
+
+- **Grip:** the tyres share their grip between cornering and braking or driving. Grab the
+  front brake hard at full lean, or spin the rear with too much throttle, and it goes down.
+  The same happens if you ride onto grass leaned over or hit a wall hard. The rider gets up
+  and is back on the road three seconds later.
+- **Wheelies and stoppies:** the front lifts under full power in the low gears, and the
+  rear under hard braking. With the aids on, the anti-wheelie and ABS keep both wheels down.
+- **Controls:** the front brake is the brake pedal, and the rear brake is the handbrake
+  (X on a controller, Space on the keyboard). On a controller, the stick asks for a share
+  of the lean the tyres allow, so full stick is the most the bike can lean at any speed.
+- **Views:** in the cockpit camera you look out of the helmet, over the clocks, and the
+  horizon tilts with the lean.
+
+The AI rides it too, round every circuit and stage.
+
 ## Controls
 
-| Wheel | Keyboard | |
-|---|---|---|
-| Steering, pedals | Arrow keys | drive |
-| Paddles | A / Z | shift up / down |
-| H-shifter | | choose an H-shifter gearbox in the menu |
-| L3 | Space | handbrake |
-| | X (hold) | reverse, automatic gearbox |
-| Triangle | C | camera: cockpit, hood, chase, far chase, trackside |
-| Share | V | mirror |
-| | G | ghost |
-| | H | panels |
-| | L | driving line |
-| | B | co-driver's voice |
-| Square | R | back on the track (the lap is lost; +15 s on a stage) |
-| + / - or dial | + / - | force feedback strength |
-| R3 (press again for the front) | W (hold) | look back |
-| | Q / E (hold) | look left / right |
-| | [ / ] | field of view |
-| Options | Esc | pause; then F5 / Square restarts, F10 / Circle goes to the menu |
+| Wheel | Xbox controller | Keyboard | |
+|---|---|---|---|
+| Steering, pedals | Left stick, RT / LT | Arrow keys | drive |
+| Paddles | RB / LB | A / Z | shift up / down |
+| H-shifter | | | choose an H-shifter gearbox in the menu |
+| L3 | X (hold) | Space | handbrake (on the motorcycle: the rear brake) |
+| | | X (hold) | reverse, automatic gearbox |
+| Triangle | Y | C | camera: cockpit, hood, chase, far chase, trackside |
+| Share | Back | V | mirror |
+| | | G | ghost |
+| | | H | panels |
+| | | L | driving line |
+| | | B | co-driver's voice |
+| Square | Click the left stick | R | back on the track (the lap is lost; +15 s on a stage) |
+| + / - or dial | | + / - | force feedback strength |
+| R3 (press again for the front) | Click the right stick | W (hold) | look back |
+| | | Q / E (hold) | look left / right |
+| | | [ / ] | field of view |
+| Options | Start | Esc | pause; then F5 / Square (X) restarts, F10 / Circle (B) goes to the menu |
 | | F11 | fullscreen |
 | Triangle in pause | F2 | replay the last ten minutes: arrows go back and forward, up/down set the speed, space stops it, C changes camera |
 | | F9 | record a video with sound, F9 again stops (saved in `~/Videos/AdaRace`, needs ffmpeg) |
 
-In the menu the d-pad moves between rows and changes values, and X starts.
+In the menu the d-pad moves between rows and changes values, and X starts (A on a
+controller).
+
+The controller rumbles on kerbs, on knocks and when you fall. Its light motor buzzes while a
+tyre slides, and with the engine on the motorcycle. With two players, the controller belongs
+to the second player.
 Choices are remembered in `~/.adaracerc`.
 
 ## Checks
@@ -153,7 +181,8 @@ Choices are remembered in `~/.adaracerc`.
 start and braking figures are believable, the gearbox modes work, the steering
 pulls the right way, barriers hold, and the AI gets round every circuit.
 
-`make wheel` shows what the wheel reports and applies no force.
+`make wheel` shows what the wheel reports and applies no force. `make pad` does the same for
+a controller and gives one short, light rumble.
 
 `ADARACE_NOWHEEL=1` leaves the wheel alone. `ADARACE_SELFTEST=1` together with
 `ADARACE_AUTOSTART=1` walks through pause, restart, menu, change of circuit and
@@ -225,8 +254,8 @@ Mode *Championship* races at every circuit in turn, with points for the first ei
 (25, 18, 15, 12, 10, 8, 6, 4) and the same named rivals all season.
 
 Mode *Two players* splits the screen: player one above, on the wheel (or the arrow keys),
-player two below, on the arrow keys when there is a wheel or on W A S D when there is not,
-with the gears changing by themselves. AI cars can race the two as well.
+player two below, on a controller if there is one, and on the arrow keys when there is a
+wheel or W A S D when there is not, with the gears changing by themselves. AI cars can race the two as well.
 
 In races a car stopped on the circuit brings out a yellow flag, and if it stays stopped the
 virtual safety car: everyone slows to about 60 % of racing speed, and going faster than that

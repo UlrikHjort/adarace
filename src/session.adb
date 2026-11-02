@@ -721,13 +721,16 @@ package body Session is
                                                  when Race_GT3 => 410_000.0,
                                                  when Rally_4WD => 230_000.0,
                                                  when Classic_RWD => 155_000.0,
-                                                 when Hyper_AWD => 510_000.0) / Spec.Mass,
+                                                 when Hyper_AWD => 510_000.0,
+                                                 when Sport_Bike => 150_000.0) / Spec.Mass,
          Drag_Per_V2 => 0.5 * 1.2 * Spec.Cd_A / Spec.Mass,
          Brake_Acc => Spec.Mu * 9.81 * 0.62 * Condition_Grip (Spec)
            * (if Track.Is_Stage then Spec.Loose_Mu * 0.78 else 1.0));
       Load_Best;
       Restart;
    end Start;
+
+   Fall_Time : constant := 3.0;   --  seconds on the ground after a fall
 
    procedure Reset_Player is
       C : Car renames Cars (1);
@@ -941,6 +944,19 @@ package body Session is
                Vehicle.Step (Cars (I), Player_Spec, Second_Hands,
                              (Abs_On => Config.Assist.Abs_On, Tc_On => Config.Assist.Tc_On,
                               Mode => Automatic, Damage => Config.Assist.Damage, others => <>));
+            end if;
+         end if;
+         --  A rider down gets up after a while, back on the road
+         if Cars (I).Fallen_T > Fall_Time and then I <= (if Config.Two_Players then 2 else 1) then
+            if I = 1 then
+               Reset_Player;
+            else
+               declare
+                  S : Track.Sample renames Track.Samples (Cars (I).Hint);
+               begin
+                  Vehicle.Place (Cars (I), Config.Kind, S.X + S.RX * S.Line_D, S.Z + S.RZ * S.Line_D,
+                                 Arctan (S.TX, -S.TZ));
+               end;
             end if;
          end if;
          if not (Config.Online and then I = 2) then

@@ -872,11 +872,18 @@ package body Renderer is
             Shaders.Set (U_Grain, Float'(0.0));
             glDisable (GL_CULL_FACE);
             Mesh.Draw (Car_Model.Meshes (Kind).Cockpit);
-            Shaders.Set
-              (U_Model,
-               M * Translation ((Car_Model.Steering_X, Car_Model.Steering_Y, Car_Model.Steering_Z))
-               * Rotation_X (-Car_Model.Steering_Tilt)
-               * Rotation_Z (-Steer_In * 2.5 * Pi));
+            if Vehicle.Is_Bike (Kind) then
+               Shaders.Set
+                 (U_Model,
+                  M * Translation ((0.0, Car_Model.Bars_Y, Car_Model.Bars_Z))
+                  * Rotation_Y (-Poses (Focus_Car).Steer));
+            else
+               Shaders.Set
+                 (U_Model,
+                  M * Translation ((Car_Model.Steering_X, Car_Model.Steering_Y, Car_Model.Steering_Z))
+                  * Rotation_X (-Car_Model.Steering_Tilt)
+                  * Rotation_Z (-Steer_In * 2.5 * Pi));
+            end if;
             Mesh.Draw (Car_Model.Meshes (Kind).Steering);
          end;
       end if;
@@ -1017,7 +1024,7 @@ package body Renderer is
                declare
                   Base : constant Vec3 :=
                     (if Options.Camera = Cockpit
-                     then (Car_Model.Eye_X + Head_X, Car_Model.Eye_Y + Head_Y, Car_Model.Eye_Z + Head_Z)
+                     then Car_Model.Eye (Session.Config.Kind) + Vec3'(Head_X, Head_Y, Head_Z)
                      else (0.0, 1.03, -0.75));
                   Look_Dir : constant Vec3 :=
                     (Sin (Options.Look), -0.055, -Cos (Options.Look));
