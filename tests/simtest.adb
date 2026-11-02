@@ -1229,6 +1229,48 @@ procedure Simtest is
       Championship.Active := False;
    end Season;
 
+   --  Two players: car 2 answers to the second pair of hands, not the AI
+   procedure Two_Up is
+      R : Session.Settings := Hotlap (Road_GT);
+      N : Vehicle.Inputs;
+   begin
+      Track.Load (1);
+      R.Mode := Session.Race;
+      R.Two_Players := True;
+      R.Opponents := 2;
+      Session.Start (R);
+      Check (not Session.AI_Drives (2) and then Session.AI_Drives (3),
+             "car 2 is the second player's, car 3 the AI's");
+      Session.Second_Hands := (others => <>);
+      declare
+         X2 : constant Long_Float := Session.Cars (2).X;
+         Z2 : constant Long_Float := Session.Cars (2).Z;
+         X3 : constant Long_Float := Session.Cars (3).X;
+         Z3 : constant Long_Float := Session.Cars (3).Z;
+         function Moved (C : Car; X, Z : Long_Float) return Float is
+           (Float (Sqrt (Float ((C.X - X) ** 2 + (C.Z - Z) ** 2))));
+         Knocks : Float := 0.0;
+      begin
+         for I in 1 .. 14000 loop
+            Session.Step (N);
+            Knocks := Float'Max (Knocks, Session.Cars (2).Impact);
+         end loop;
+         Put_Line ("    car 2, untouched by its player, was knocked at up to" & Img (Knocks) & " m/s");
+         --  (the AI going past may nudge it; driving it would take it hundreds of metres)
+         Check (Moved (Session.Cars (2), X2, Z2) < 0.3 * Moved (Session.Cars (3), X3, Z3) and then Moved (Session.Cars (3), X3, Z3) > 40.0,
+                "with no hands on it car 2 stays put, while the AI goes:"
+                & Img (Moved (Session.Cars (2), X2, Z2), 1) & " m against"
+                & Img (Moved (Session.Cars (3), X3, Z3), 0) & " m");
+      end;
+      Session.Second_Hands := (Throttle => 1.0, others => <>);
+      for I in 1 .. 4000 loop
+         Session.Step (N);
+      end loop;
+      Check (Speed (Session.Cars (2)) > 10.0, "on the second player's throttle it goes:"
+             & Img (Speed (Session.Cars (2)) * 3.6, 0) & " km/h");
+      Session.Second_Hands := (others => <>);
+   end Two_Up;
+
    --  A rally from end to end, the AI driving, damage going along
    procedure Rally_Event is
       R : Session.Settings := Hotlap (Rally_4WD);
@@ -1606,6 +1648,7 @@ begin
    Street_Circuit;
    Rally_Event;
    Season;
+   Two_Up;
    Spoken_Notes;
    Conditions;
    Lessons;

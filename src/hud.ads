@@ -19,6 +19,9 @@ package Hud is
 
    function Format_Time (T : Float) return String;
 
+   Split : Boolean := False;
+   --  Two players, the screen in halves: a small panel each
+
    In_Cockpit : Boolean := False;
    --  The real instruments are in view: no rev bar, speed or gear panel
 

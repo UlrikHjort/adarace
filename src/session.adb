@@ -44,7 +44,8 @@ package body Session is
    Parked : Float := 0.0;
 
    function AI_Drives (I : Car_Index) return Boolean is
-     (I > 1 or else Config.Mode = Demo or else Force_AI);
+     ((I > 1 and then not (Config.Two_Players and then I = 2))
+      or else Config.Mode = Demo or else Force_AI);
 
    function Save_Name return String is
       Home : constant String :=
@@ -518,7 +519,7 @@ package body Session is
             Lights := 0;
             Lights_Out := False;
          when Hotlap =>
-            Car_Count := 1;
+            Car_Count := (if Config.Two_Players then 2 else 1);
             Lights_Out := True;
          when Stage =>
             Car_Count := 1;
@@ -737,8 +738,17 @@ package body Session is
                Hands.Brake := Float'Max (Hands.Brake, 0.2);   --  on the line, held
                Hands.Throttle := 0.0;
             end if;
-            Pit_Service (Hands);
-            Vehicle.Step (Cars (I), Player_Spec, Hands, Config.Assist);
+            if I = 1 then
+               Pit_Service (Hands);
+            end if;
+            if I = 1 then
+               Vehicle.Step (Cars (I), Player_Spec, Hands, Config.Assist);
+            else
+               --  The second player: on the keys, so the gearbox shifts itself
+               Vehicle.Step (Cars (I), Player_Spec, Second_Hands,
+                             (Abs_On => Config.Assist.Abs_On, Tc_On => Config.Assist.Tc_On,
+                              Mode => Automatic, Damage => Config.Assist.Damage, others => <>));
+            end if;
          end if;
          Update_Lap (I);
       end loop;

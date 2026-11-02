@@ -34,7 +34,10 @@ package Renderer is
    function Pose_Between (A, B : Sim_Loop.Frame; I : Positive; T : Float) return Sim_Loop.Car_Pose;
    --  In-between pose for a car; T beyond 1 runs on a little
 
-   procedure Draw (A, B : Sim_Loop.Frame; Options : View_Options; Width, Height : Natural);
+   procedure Draw (A, B : Sim_Loop.Frame; Options : View_Options; Width, Height : Natural;
+                   Focus : Positive := 1; Y0 : Natural := 0);
+   --  The view from car Focus, into the window from line Y0 up (two players:
+   --  each a half)
    --  Scene into the frame buffer that GTK has bound
 
    function Listener_Inside (Options : View_Options) return Boolean;

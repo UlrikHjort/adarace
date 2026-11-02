@@ -323,6 +323,8 @@ package body App is
 
    function In_Season return Boolean is (Combo_Mode.Get_Active = 4);
 
+   function Two_Players return Boolean is (Combo_Mode.Get_Active = 5);
+
    function Lesson_Chosen return School.Lesson_Id is
      (School.Lesson_Id (Integer (Combo_Lesson.Get_Active) + 1));
 
@@ -360,6 +362,12 @@ package body App is
                  elsif Combo_Mode.Get_Active = 0 then Session.Hotlap else Session.Race);
       if In_Season then
          S.Mode := Session.Race;
+      end if;
+      S.Two_Players := Two_Players and then not Track.Is_Stage;
+      if S.Two_Players then
+         S.Mode := Session.Race;
+         --  (the second player counts as one of the cars)
+         S.Opponents := Natural'Max (1, S.Opponents);
       end if;
       S.Kind := Chosen_Car;
       S.Opponents := Natural (Combo_Opp.Get_Active) + 1;
@@ -562,6 +570,18 @@ package body App is
          Toggle_Replay;
          return True;
       end if;
+      --  Two players without a wheel: the second drives on W A S D
+      if Session.Config.Two_Players and then not Sim_Loop.Wheel_Present
+        and then (K = GDK_LC_w or else K = GDK_LC_a or else K = GDK_LC_s or else K = GDK_LC_d)
+      then
+         if K = GDK_LC_w then Keys.Throttle_2 := True;
+         elsif K = GDK_LC_s then Keys.Brake_2 := True;
+         elsif K = GDK_LC_a then Keys.Left_2 := True;
+         else Keys.Right_2 := True;
+         end if;
+         Sim_Loop.Set_Keys (Keys);
+         return True;
+      end if;
       if K = GDK_Left then Keys.Left := True;
       elsif K = GDK_Right then Keys.Right := True;
       elsif K = GDK_Up then Keys.Throttle := True;
@@ -612,6 +632,11 @@ package body App is
       use Gdk.Types.Keysyms;
       K : constant Gdk.Types.Gdk_Key_Type := Event.Keyval;
    begin
+      if K = GDK_LC_w then Keys.Throttle_2 := False;
+      elsif K = GDK_LC_s then Keys.Brake_2 := False;
+      elsif K = GDK_LC_a then Keys.Left_2 := False;
+      elsif K = GDK_LC_d then Keys.Right_2 := False;
+      end if;
       if K = GDK_Left then Keys.Left := False;
       elsif K = GDK_Right then Keys.Right := False;
       elsif K = GDK_Up then Keys.Throttle := False;
@@ -907,8 +932,19 @@ package body App is
          end if;
          declare
             T0 : constant Long_Float := Sim_Loop.Now;
+            Halves : constant Boolean :=
+              not In_Menu and then Session.Config.Two_Players and then Cur.Count >= 2;
          begin
-            Renderer.Draw (Prev, Cur, Opt, W, H);
+            Hud.Split := Halves;
+            if Halves then
+               --  Player one above, player two below
+               Renderer.Draw (Prev, Cur, Opt, W, H / 2, Focus => 1, Y0 => H - H / 2);
+               Renderer.Draw (Prev, Cur, Opt, W, H / 2, Focus => 2, Y0 => 0);
+               --  (back to the whole window, which the next frame reads its size from)
+               GL.glViewport (0, 0, GL.GLsizei (W), GL.GLsizei (H));
+            else
+               Renderer.Draw (Prev, Cur, Opt, W, H);
+            end if;
             Time_Scene := Time_Scene + (Sim_Loop.Now - T0);
          end;
          Hud.In_Cockpit := Options.Camera = Renderer.Cockpit;
@@ -1213,7 +1249,7 @@ package body App is
       Combo_Car.Set_Active (0);
       Add_Row ("Car", Combo_Car);
 
-      Make (Combo_Mode, "Mode", "Hot laps, against your ghost|Race against the AI|Driving school|Rally: every stage in turn|Championship: a race at every circuit");
+      Make (Combo_Mode, "Mode", "Hot laps, against your ghost|Race against the AI|Driving school|Rally: every stage in turn|Championship: a race at every circuit|Two players: split screen");
       Gtk_New (Combo_Lesson);
       for L in School.Lesson_Id loop
          Combo_Lesson.Append_Text (School.Title (L));

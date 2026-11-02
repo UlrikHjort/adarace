@@ -192,6 +192,10 @@ damage goes with you, half of it mended at each service.
 Mode *Championship* races at every circuit in turn, with points for the first eight places
 (25, 18, 15, 12, 10, 8, 6, 4) and the same named rivals all season.
 
+Mode *Two players* splits the screen: player one above, on the wheel (or the arrow keys),
+player two below, on the arrow keys when there is a wheel or on W A S D when there is not,
+with the gears changing by themselves. AI cars can race the two as well.
+
 ## Your own roads
 
 Roads are text files in `tracks/`, read at start in the order of their names, so a new circuit
