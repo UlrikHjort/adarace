@@ -25,6 +25,7 @@ uniform float uAlpha;
 uniform float uShadows;
 uniform float uGrain;
 uniform float uForest;
+uniform float uCity;
 uniform float uDirt;
 uniform float uDent;
 uniform float uDialRpm;
@@ -416,6 +417,45 @@ void main()
         gloss = 0.12;
     }
 
+    // City: paving where a field would be
+    if (mat == 1.0 && uCity > 0.5) {
+        vec2 p = vPos.xz;
+        vec2 slab = abs(fract(p / vec2(1.2, 0.8)) - 0.5);
+        float joint = smoothstep(0.47, 0.5, max(slab.x, slab.y));
+        albedo = texture(uAsphalt, p / 3.0).rgb * 2.4 * (0.85 + 0.25 * fbm(p / 9.0)) * (1.0 - 0.35 * joint);
+        N = vec3(0.0, 1.0, 0.0);
+    }
+    // A building's front: storeys of windows, a shop front at the street
+    if (mat == 21.0) {
+        float tint = vColor.r;
+        vec3 wall = mix(mix(vec3(0.55, 0.42, 0.32), vec3(0.72, 0.68, 0.58), step(0.33, tint)),
+                        mix(vec3(0.40, 0.44, 0.48), vec3(0.75, 0.55, 0.40), step(0.8, tint)),
+                        step(0.6, tint));
+        vec2 cell = vec2(vUV.x / 3.4, (vUV.y - 4.2) / 3.1);
+        vec2 f = fract(cell);
+        float window = step(0.18, f.x) * step(f.x, 0.82) * step(0.22, f.y) * step(f.y, 0.85)
+                     * step(0.0, cell.y);
+        float shop = step(vUV.y, 3.6) * step(0.4, vUV.y) * step(0.08, fract(vUV.x / 6.0));
+        float glass = max(window, shop);
+        albedo = mix(wall * (0.9 + 0.2 * noise(vUV * 0.7)), vec3(0.04, 0.05, 0.06), glass);
+        gloss = 0.6 * glass;
+        shine = 120.0;
+        fres = 0.6 * glass;
+        // Lit rooms after dark
+        float night = 1.0 - day;
+        float lit = step(0.55, hash(floor(cell) + floor(vPos.xz / 5.0) * 0.37));
+        glow = vec3(1.0, 0.75, 0.42) * night * 0.9 * (window * lit + shop * 1.4);
+    }
+    if (mat == 22.0) {               // harbour water
+        vec2 p = vPos.xz;
+        float t = uCarV * 0.0;
+        N = normalize(vec3(fbm(p * 0.3 + 3.0) - 0.5, 4.0, fbm(p * 0.3 - 7.0) - 0.5));
+        albedo = vec3(0.015, 0.035, 0.04);
+        gloss = 0.9;
+        shine = 200.0;
+        fres = 1.0;
+    }
+
     // Mud, dust or road salt on the car, worst low down; scratches where it was hit
     if (uGrain < 0.5 && (mat == 5.0 || mat == 7.0 || mat == 0.0 || mat == 6.0)) {
         if (uDent > 0.0 && mat == 5.0) {
@@ -521,6 +561,15 @@ void main()
     float spec = min(gloss * pow(max(dot(N, H), 0.0), shine) * (shine + 8.0) / 60.0, 1.2);
     // The sky from above, the ground's bounce from below
     vec3 ambient = mix(vec3(0.10, 0.11, 0.09) * day, uSkyColor * 1.1, 0.5 + 0.5 * N.y);
+    // A town at night: street lamps over the road and the glow off the sky
+    if (uCity > 0.5 && day < 0.7) {
+        float night = 1.0 - day / 0.7;
+        ambient += vec3(0.05, 0.04, 0.03) * night;
+        if (mat == 2.0 || mat == 3.0) {
+            float a = abs(fract(vUV.x / 30.0) - 0.5) * 30.0;
+            ambient += vec3(1.0, 0.72, 0.42) * 0.9 * night * exp(-a * a / 70.0);
+        }
+    }
     vec3 light = uSunColor * NdotL * shadow;
     vec3 color = albedo * (light + ambient) + uSunColor * spec * shadow * step(0.001, NdotL) + glow;
 

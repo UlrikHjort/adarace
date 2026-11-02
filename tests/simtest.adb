@@ -13,6 +13,7 @@ with Ada.Numerics.Elementary_Functions;
 with Ada.Strings.Fixed;
 with Ada.Text_IO;
 
+with Championship;
 with Codriver;
 with Rally;
 with School;
@@ -1091,6 +1092,53 @@ procedure Simtest is
       end;
    end Lessons;
 
+   --  A street circuit: walls at the kerb, and no building on the road
+   procedure Street_Circuit is
+      City : Natural := 0;
+   begin
+      for T in 1 .. Track.Track_Count loop
+         Track.Load (T);
+         if Track.Is_City then
+            City := T;
+            exit;
+         end if;
+      end loop;
+      Check (City > 0, "there is a street circuit");
+      if City = 0 then
+         return;
+      end if;
+      declare
+         Close : Boolean := True;
+         Clear : Boolean := True;
+      begin
+         for I in 0 .. Track.Count - 1 loop
+            declare
+               S : Track.Sample renames Track.Samples (I);
+            begin
+               if S.S > Track.Pit_To + 30.0 then
+                  Close := Close and then S.Wall_L - S.W_L < 4.0 and then S.Wall_R - S.W_R < 4.0;
+               end if;
+            end;
+         end loop;
+         Check (Close, "the walls stand close to the road");
+         Check (Track.Buildings'Length > 60, "a town:" & Track.Buildings'Length'Image & " buildings");
+         for B of Track.Buildings.all loop
+            declare
+               H : Natural := Track.Find_Nearest (B.X, B.Z);
+               I : Natural;
+               Tt, D : Float;
+            begin
+               Track.Locate (B.X, B.Z, H, I, Tt, D);
+               Clear := Clear and then abs D - 0.5 * Float'Max (B.Len, B.Depth)
+                 > Float'Max (Track.Samples (I).Wall_L, Track.Samples (I).Wall_R);
+            end;
+         end loop;
+         Check (Clear, "no building stands in the road or its walls");
+         Check (Track.Has_Water and then Track.Water_Y < Track.Samples (0).Y,
+                "the harbour lies below the quay");
+      end;
+   end Street_Circuit;
+
    --  Road files: bad ones are named, by line, and the game goes on
    procedure Road_Files is
       use Ada.Text_IO;
@@ -1137,6 +1185,91 @@ procedure Simtest is
          Check (Stages >= 3, "of them, stages:" & Stages'Image);
       end;
    end Road_Files;
+
+   --  A season, every round raced by the AI in all the cars
+   procedure Season is
+      R : Session.Settings := Hotlap (Race_GT3);
+      N : Vehicle.Inputs;
+      Total : Natural := 0;
+   begin
+      R.Mode := Session.Race;
+      R.Opponents := 3;
+      R.Laps := 1;
+      Championship.Begin_Season (R.Opponents + 1);
+      Check (Championship.Round_Total >= 4, "a season has" & Championship.Round_Total'Image & " rounds");
+      for Round in 1 .. Championship.Round_Total loop
+         Track.Load (Championship.Current_Road);
+         Check (not Track.Is_Stage, "round" & Round'Image & " is a circuit");
+         Session.Force_AI := True;
+         Session.Start (R);
+         for I in 1 .. 900_000 loop
+            Session.Step (N);
+            exit when Session.Race_Over;
+         end loop;
+         Check (Session.Race_Over, Track.Name (Championship.Current_Road) & " raced");
+         Championship.Finish_Round;
+         Championship.Finish_Round;   --  (twice: counted once)
+         if Round < Championship.Round_Total then
+            Championship.Next_Round;
+         end if;
+      end loop;
+      Session.Force_AI := False;
+      declare
+         T : constant Championship.Table := Championship.Standings;
+      begin
+         for E of T loop
+            Total := Total + E.Points;
+         end loop;
+         Check (Total = Championship.Round_Total * (25 + 18 + 15 + 12),
+                "every round gave out its points, once:" & Total'Image);
+         Check (T (T'First).Points >= T (T'Last).Points, "the table is in order");
+         Put_Line ("    champion " & Championship.Driver_Name (T (T'First).Car)
+                   & T (T'First).Points'Image & " points");
+      end;
+      Championship.Active := False;
+   end Season;
+
+   --  Two players: car 2 answers to the second pair of hands, not the AI
+   procedure Two_Up is
+      R : Session.Settings := Hotlap (Road_GT);
+      N : Vehicle.Inputs;
+   begin
+      Track.Load (1);
+      R.Mode := Session.Race;
+      R.Two_Players := True;
+      R.Opponents := 2;
+      Session.Start (R);
+      Check (not Session.AI_Drives (2) and then Session.AI_Drives (3),
+             "car 2 is the second player's, car 3 the AI's");
+      Session.Second_Hands := (others => <>);
+      declare
+         X2 : constant Long_Float := Session.Cars (2).X;
+         Z2 : constant Long_Float := Session.Cars (2).Z;
+         X3 : constant Long_Float := Session.Cars (3).X;
+         Z3 : constant Long_Float := Session.Cars (3).Z;
+         function Moved (C : Car; X, Z : Long_Float) return Float is
+           (Float (Sqrt (Float ((C.X - X) ** 2 + (C.Z - Z) ** 2))));
+         Knocks : Float := 0.0;
+      begin
+         for I in 1 .. 14000 loop
+            Session.Step (N);
+            Knocks := Float'Max (Knocks, Session.Cars (2).Impact);
+         end loop;
+         Put_Line ("    car 2, untouched by its player, was knocked at up to" & Img (Knocks) & " m/s");
+         --  (the AI going past may nudge it; driving it would take it hundreds of metres)
+         Check (Moved (Session.Cars (2), X2, Z2) < 0.3 * Moved (Session.Cars (3), X3, Z3) and then Moved (Session.Cars (3), X3, Z3) > 40.0,
+                "with no hands on it car 2 stays put, while the AI goes:"
+                & Img (Moved (Session.Cars (2), X2, Z2), 1) & " m against"
+                & Img (Moved (Session.Cars (3), X3, Z3), 0) & " m");
+      end;
+      Session.Second_Hands := (Throttle => 1.0, others => <>);
+      for I in 1 .. 4000 loop
+         Session.Step (N);
+      end loop;
+      Check (Speed (Session.Cars (2)) > 10.0, "on the second player's throttle it goes:"
+             & Img (Speed (Session.Cars (2)) * 3.6, 0) & " km/h");
+      Session.Second_Hands := (others => <>);
+   end Two_Up;
 
    --  A rally from end to end, the AI driving, damage going along
    procedure Rally_Event is
@@ -1512,7 +1645,10 @@ begin
    Rally_Stage;
    Stage_By_Hand;
    Road_Files;
+   Street_Circuit;
    Rally_Event;
+   Season;
+   Two_Up;
    Spoken_Notes;
    Conditions;
    Lessons;

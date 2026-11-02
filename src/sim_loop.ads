@@ -22,6 +22,7 @@ package Sim_Loop is
       Brake : Float := 0.0;
       Speed : Float := 0.0;
       Rpm   : Float := 0.0;
+      Gear  : Integer := 0;
    end record;
 
    type Pose_Array is array (Session.Car_Index) of Car_Pose;
@@ -60,6 +61,8 @@ package Sim_Loop is
 
    type Keys is record
       Left, Right, Throttle, Brake, Handbrake, Clutch : Boolean := False;
+      --  The second player's, in a race of two
+      Left_2, Right_2, Throttle_2, Brake_2 : Boolean := False;
    end record;
 
    procedure Set_Keys (K : Keys);

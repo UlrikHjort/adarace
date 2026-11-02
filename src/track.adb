@@ -33,6 +33,10 @@ package body Track is
    type Road_Info is record
       Name : Unbounded_String;
       Stage : Boolean := False;
+      City : Boolean := False;
+      Waters : Pool_Array;
+      Water_Count : Natural := 0;
+      Blocks : Building_Access;              --  real buildings, from a map
       Finish_X, Finish_Z : Float := 0.0;
       Points : Point_Access;
    end record;
@@ -48,7 +52,9 @@ package body Track is
       use Ada.Text_IO;
       F : File_Type;
       Line_No : Natural := 0;
-      Buffer : array (1 .. 400) of Point;
+      Buffer : array (1 .. 800) of Point;
+      Block_Buffer : Building_Array (1 .. 3000);
+      Block_Used : Natural := 0;
       Used : Natural := 0;
       In_Points : Boolean := False;
       Has_Kind, Has_Name, Has_Finish : Boolean := False;
@@ -155,6 +161,48 @@ package body Track is
                         R.Finish_Z := V (2);
                         Has_Finish := True;
                      end;
+                  elsif Key = "setting" then
+                     if Rest = "city" then
+                        R.City := True;
+                     elsif Rest /= "country" then
+                        Fail ("setting is country or city");
+                     end if;
+                  elsif Key = "water" then
+                     declare
+                        V : Float_List (1 .. 3);
+                        N : Natural;
+                     begin
+                        Numbers (Rest, V, N);
+                        if N /= 3 or else V (3) <= 0.0 then
+                           Fail ("water is x z radius");
+                        end if;
+                        if R.Water_Count = Max_Water then
+                           Fail ("more water than a road may have");
+                        end if;
+                        R.Water_Count := R.Water_Count + 1;
+                        R.Waters (R.Water_Count) := (V (1), V (2), V (3));
+                     end;
+                  elsif Key = "block" then
+                     declare
+                        V : Float_List (1 .. 7);
+                        N : Natural;
+                     begin
+                        Numbers (Rest, V, N);
+                        if N /= 7 or else V (5) <= 0.0 or else V (6) <= 0.0 or else V (7) <= 0.0 then
+                           Fail ("block is x z along-x along-z length depth height");
+                        end if;
+                        if Block_Used = Block_Buffer'Last then
+                           Fail ("more blocks than a road may have");
+                        end if;
+                        Block_Used := Block_Used + 1;
+                        declare
+                           L : constant Float := Float'Max (0.001, Sqrt (V (3) ** 2 + V (4) ** 2));
+                        begin
+                           Block_Buffer (Block_Used) :=
+                             (X => V (1), Y => 0.0, Z => V (2), TX => V (3) / L, TZ => V (4) / L,
+                              Len => V (5), Depth => V (6), Height => V (7), Tint => 0.0);
+                        end;
+                     end;
                   elsif Key = "points" then
                      In_Points := True;
                   else
@@ -175,6 +223,7 @@ package body Track is
          Fail ("a road needs at least four points");
       end if;
       R.Points := new Point_Array'(Point_Array (Buffer (1 .. Used)));
+      R.Blocks := new Building_Array'(Block_Buffer (1 .. Block_Used));
    exception
       when others =>
          if Is_Open (F) then
@@ -261,6 +310,12 @@ package body Track is
    function Loaded return Track_Id is (Current);
 
    function Is_Stage return Boolean is (Roads (Current).Stage);
+
+   function Is_City return Boolean is (Roads (Current).City);
+
+   function Water_X return Float is (Pools (1).X);
+   function Water_Z return Float is (Pools (1).Z);
+   function Water_R return Float is (Pools (1).R);
 
    function Next (I : Natural; N : Integer := 1) return Natural is
      (Natural ((Integer (I) + N) mod Count));
@@ -442,8 +497,9 @@ package body Track is
          Bk (I) := Samples (I).Bank;
          Wd (I) := Samples (I).W_L;
       end loop;
-      Circular_Smooth (PX, 9, 3);
-      Circular_Smooth (PZ, 9, 3);
+      --  (a town keeps its square corners)
+      Circular_Smooth (PX, (if Roads (Current).City then 4 else 9), 3);
+      Circular_Smooth (PZ, (if Roads (Current).City then 4 else 9), 3);
       Circular_Smooth (Y, 12, 3);
       Circular_Smooth (Bk, 20, 2);
       Circular_Smooth (Wd, 25, 2);
@@ -528,6 +584,23 @@ package body Track is
             Samples (I).Kerb_L := (if In_L or else Exit_R then 1.3 else 0.0);
          end;
       end loop;
+
+      --  A street circuit: the wall just past the kerb, but for room for the
+      --  pits by the start
+      if Is_City then
+         for I in R loop
+            declare
+               S : Sample renames Samples (I);
+               Pits : constant Boolean := S.S < Pit_To + 30.0;
+            begin
+               S.Gravel_L := False;
+               S.Gravel_R := False;
+               S.Wall_L := S.W_L + S.Kerb_L + (if Pits then Pit_Wide + 2.5 else 1.4);
+               S.Wall_R := S.W_R + S.Kerb_R + 1.4;
+            end;
+         end loop;
+         return;
+      end if;
 
       --  Run-off: wide on the outside of the bends, gravel there, and the
       --  barrier beyond
@@ -683,7 +756,24 @@ package body Track is
                      Road : constant Float := Sum_H / Sum_W;
                      Far  : constant Float := Smooth (28.0, 170.0, Dist);
                   begin
-                     Grid (IZ * Grid_NX + IX) := Road - 0.2 + Far * (Hills + Far * 12.0);
+                     if Is_City then
+                        --  A town is flat; the harbour basin is dug out
+                        Grid (IZ * Grid_NX + IX) := Road - 0.2 + Far * (Hills * 0.08);
+                     else
+                        Grid (IZ * Grid_NX + IX) := Road - 0.2 + Far * (Hills + Far * 12.0);
+                     end if;
+                     for K in 1 .. Pool_Count loop
+                        declare
+                           W : constant Float :=
+                             Sqrt ((X - Pools (K).X) ** 2 + (Z - Pools (K).Z) ** 2) - Pools (K).R;
+                        begin
+                           if W < 0.0 then
+                              Grid (IZ * Grid_NX + IX) :=
+                                Float'Min (Grid (IZ * Grid_NX + IX),
+                                           Water_Y - 0.4 - Float'Min (5.0, -W * 0.5));
+                           end if;
+                        end;
+                     end loop;
                   end;
                end;
             end loop;
@@ -836,6 +926,10 @@ package body Track is
             C.Surf := Asphalt;
             C.Y := Road + 0.0035 * (Noise (S / 3.5, D / 2.5) - 0.5)
                         + 0.0016 * (Noise (S / 1.1, D / 0.8 + 50.0) - 0.5);
+         elsif Is_City and then (Kerb_W = 0.0 or else Over >= Kerb_W) then
+            --  The pavement, up a curb
+            C.Surf := Asphalt;
+            C.Y := Road + 0.12 * Smooth (0.0, 0.15, Over - Kerb_W);
          elsif Kerb_W > 0.0 and then Over < Kerb_W then
             --  Raised, with ribs that rattle the car
             declare
@@ -994,6 +1088,7 @@ package body Track is
    type Int_Access is access Int_Array;
    procedure Free is new Ada.Unchecked_Deallocation (Int_Array, Int_Access);
    procedure Free is new Ada.Unchecked_Deallocation (Tree_Array, Tree_Access);
+   procedure Free is new Ada.Unchecked_Deallocation (Building_Array, Building_Access);
    Cell_Head, Tree_Next : Int_Access;
    Cells_X, Cells_Z : Natural := 0;
 
@@ -1023,6 +1118,7 @@ package body Track is
             Reach : constant Float :=
               (if Stage then S.W_L + (if Near_Start and then (I < 12 or else I > Count - 12) then 8.0
                                       else 3.0)
+               elsif Is_City then Float'Max (S.Wall_L, S.Wall_R) + 70.0
                else Float'Max (S.Wall_L, S.Wall_R) + (if Near_Start then 50.0 else 14.0));
             C : constant Integer := Integer (Reach / Cell) + 1;
             CX : constant Integer := Integer ((S.X - Grid_X0) / Cell);
@@ -1094,7 +1190,7 @@ package body Track is
             Wood : constant Float := Fbm (X / 180.0, Z / 180.0, 3);
          begin
             if IZ * NX + IX <= Taken'Last and then not Taken (IZ * NX + IX)
-              and then Wood > (if Stage then 0.26 else 0.46)
+              and then Wood > (if Stage then 0.26 elsif Is_City then 0.62 else 0.46)
               and then Placed < Max_Trees
             then
                declare
@@ -1142,6 +1238,125 @@ package body Track is
          end;
       end loop;
    end Place_Trees;
+
+   --  Blocks along the street, each kept clear of every part of the road
+   procedure Place_Buildings is
+      use Ada.Numerics.Float_Random;
+      Gen : Generator;
+      Map : Building_Access renames Roads (Current).Blocks;
+      From_Map : constant Boolean := Map /= null and then Map'Length > 0;
+      Found : Building_Array (1 .. 3000);
+      Placed : Natural := 0;
+
+      function Clear (B : Building) return Boolean is
+         Radius : constant Float := 0.5 * Sqrt (B.Len ** 2 + B.Depth ** 2);
+      begin
+         for K in 1 .. Pool_Count loop
+            if Sqrt ((B.X - Pools (K).X) ** 2 + (B.Z - Pools (K).Z) ** 2) < Pools (K).R + Radius + 4.0 then
+               return False;
+            end if;
+         end loop;
+         for J in 0 .. Count - 1 loop
+            if J mod 2 = 0 then
+               declare
+                  S : Sample renames Samples (J);
+                  Room : constant Float := Float'Max (S.Wall_L, S.Wall_R) + 3.0;
+               begin
+                  if Sqrt ((S.X - B.X) ** 2 + (S.Z - B.Z) ** 2) < Room + Radius then
+                     return False;
+                  end if;
+               end;
+            end if;
+         end loop;
+         for K in 1 .. (if From_Map then 0 else Placed) loop
+            if Sqrt ((Found (K).X - B.X) ** 2 + (Found (K).Z - B.Z) ** 2)
+              < Radius + 0.5 * Sqrt (Found (K).Len ** 2 + Found (K).Depth ** 2) - 3.0
+            then
+               return False;
+            end if;
+         end loop;
+         return True;
+      end Clear;
+   begin
+      if Buildings /= null then
+         Free (Buildings);
+      end if;
+      if not Is_City then
+         Buildings := new Building_Array (1 .. 0);
+         return;
+      end if;
+      Reset (Gen, 1849);
+      --  Real buildings from a map: where they stand, if clear of the road
+      if From_Map then
+         for M of Map.all loop
+            declare
+               B : Building := M;
+               Radius : constant Float := 0.5 * Sqrt (B.Len ** 2 + B.Depth ** 2);
+               Fits : Boolean := True;
+            begin
+               B.Y := Terrain_Height (B.X, B.Z);
+               B.Tint := Random (Gen);
+               --  (a big one may stand close to the road at a corner: shrink it rather)
+               for J in 0 .. Count - 1 loop
+                  if J mod 2 = 0 then
+                     declare
+                        S : Sample renames Samples (J);
+                        Gap : constant Float := Sqrt ((S.X - B.X) ** 2 + (S.Z - B.Z) ** 2)
+                          - Float'Max (S.Wall_L, S.Wall_R) - 2.0;
+                     begin
+                        if Gap < Radius then
+                           Fits := Fits and then Gap > 6.0;
+                           B.Len := Float'Min (B.Len, Gap * 1.3);
+                           B.Depth := Float'Min (B.Depth, Gap * 1.3);
+                        end if;
+                     end;
+                  end if;
+               end loop;
+               if Fits and then Placed < Found'Last and then Clear (B) then
+                  Placed := Placed + 1;
+                  Found (Placed) := B;
+               end if;
+            end;
+         end loop;
+         Buildings := new Building_Array'(Found (1 .. Placed));
+         return;
+      end if;
+      for Row in 0 .. 1 loop
+         for I in 0 .. Count - 1 loop
+            if I mod 11 = 0 and then I > 60 and then I < Count - 40 then
+               for Side in 0 .. 1 loop
+                  declare
+                     S : Sample renames Samples (I);
+                     Sgn : constant Float := (if Side = 0 then -1.0 else 1.0);
+                     Len : constant Float := 16.0 + 14.0 * Random (Gen);
+                     Depth : constant Float := 12.0 + 10.0 * Random (Gen);
+                     Wall : constant Float := (if Side = 0 then S.Wall_L else S.Wall_R);
+                     Back : constant Float :=
+                       Wall + 4.0 + Depth / 2.0 + Float (Row) * (Depth + 14.0);
+                     B : Building;
+                  begin
+                     B.X := S.X + S.RX * Sgn * Back;
+                     B.Z := S.Z + S.RZ * Sgn * Back;
+                     B.TX := S.TX;
+                     B.TZ := S.TZ;
+                     B.Len := Len;
+                     B.Depth := Depth;
+                     --  Taller towards the middle of town, low on the quay
+                     B.Height := (7.0 + 9.0 * Random (Gen)) * (1.0 + Float (Row) * 0.6)
+                       + (if Random (Gen) > 0.88 then 14.0 + 16.0 * Random (Gen) else 0.0);
+                     B.Tint := Random (Gen);
+                     B.Y := Terrain_Height (B.X, B.Z);
+                     if Placed < Found'Last and then Clear (B) then
+                        Placed := Placed + 1;
+                        Found (Placed) := B;
+                     end if;
+                  end;
+               end loop;
+            end if;
+         end loop;
+      end loop;
+      Buildings := new Building_Array'(Found (1 .. Placed));
+   end Place_Buildings;
 
    procedure Nearest_Tree (X, Z, Reach : Float; Found : out Boolean; TX, TZ : out Float) is
       CX : constant Integer := Integer (Float'Floor ((X - Grid_X0) / Tree_Cell));
@@ -1281,9 +1496,20 @@ package body Track is
       Build_Line (Roads (T).Points.all);
       Frames;
       Edges;
+      Pool_Count := Roads (T).Water_Count;
+      Pools := Roads (T).Waters;
+      Has_Water := Pool_Count > 0;
+      if Has_Water then
+         Water_Y := Float'Last;
+         for I in 0 .. Count - 1 loop
+            Water_Y := Float'Min (Water_Y, Samples (I).Y);
+         end loop;
+         Water_Y := Water_Y - 1.6;
+      end if;
       Build_Terrain;
       Build_Racing_Line;
       Place_Trees;
+      Place_Buildings;
       if Is_Stage then
          Stage_End := Samples (Find_Nearest (Roads (T).Finish_X, Roads (T).Finish_Z)).S;
       else

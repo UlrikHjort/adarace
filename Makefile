@@ -4,6 +4,7 @@
 #   make run     build and start it
 #   make check   is everything needed to build it here?
 #   make dist    the prebuilt download
+#   make demo    a demo video with sound (dist/adarace-demo.mp4)
 #   make test    the headless physics and circuit checks
 #   make wheel   read the wheel for three seconds (never applies a force)
 #   make clean
@@ -18,6 +19,9 @@ game: check
 
 run: game voice
 	./bin/adarace
+
+demo: game voice
+	@scripts/make_demo.sh
 
 dist: game
 	@scripts/make_dist.sh
@@ -38,4 +42,4 @@ clean:
 	gprclean -q -P simtest.gpr
 	gprclean -q -P wheelprobe.gpr
 
-.PHONY: all check game run dist voice test wheel clean
+.PHONY: all check game run demo dist voice test wheel clean

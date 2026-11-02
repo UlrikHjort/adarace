@@ -26,7 +26,7 @@ school, night, weather and seasons.
 | A lesson passed, with the coach's word | The menu and car setup |
 
 All of it is the game itself with the AI driver at the wheel, made by
-`scripts/make_media.sh`.
+`scripts/make_media.sh`. `make demo` records a demo video with sound in the same way.
 
 ## Getting started
 
@@ -78,8 +78,10 @@ Physics run at 1 kHz in an Ada task of their own, independent of the frame rate.
   Sent at 125 Hz.
 
 Five cars: a road GT, a GT3 with slicks and wings, a four wheel drive rally car, a light
-classic and a mid-engined hypercar. Three circuits: Søndersø Ring (4.9 km), Monte Ferro
-(3.2 km, 64 m of climb) and Kalvø Speedway (3.2 km, banked oval), and three rally stages.
+classic and a mid-engined hypercar. Five circuits: Søndersø Ring (4.9 km), Monte Ferro
+(3.2 km, 64 m of climb), Kalvø Speedway (3.2 km, banked oval), the Havnebyen street circuit
+(2.8 km, between walls along a harbour) and the Boulevard Royal street circuit on real
+city streets (3.8 km), and three rally stages.
 
 Hot laps against the ghost of your best lap, which is kept per car and circuit
 in `~/.local/share/adarace`, or races against up to seven AI cars on the same
@@ -111,6 +113,7 @@ damage, and collects mud, dust or road salt on loose ground, which rain washes o
 | | [ / ] | field of view |
 | Options | Esc | pause; then F5 / Square restarts, F10 / Circle goes to the menu |
 | | F11 | fullscreen |
+| Triangle in pause | F2 | replay the last ten minutes: arrows go back and forward, up/down set the speed, space stops it, C changes camera |
 | | F9 | record a video with sound, F9 again stops (saved in `~/Videos/AdaRace`, needs ffmpeg) |
 
 In the menu the d-pad moves between rows and changes values, and X starts.
@@ -186,6 +189,13 @@ Mode *Rally* runs every stage in turn: Skovvej, Granbakken (tight, with hairpins
 (wide and fast). Your times add up against five crews whose pace follows the AI strength, and
 damage goes with you, half of it mended at each service.
 
+Mode *Championship* races at every circuit in turn, with points for the first eight places
+(25, 18, 15, 12, 10, 8, 6, 4) and the same named rivals all season.
+
+Mode *Two players* splits the screen: player one above, on the wheel (or the arrow keys),
+player two below, on the arrow keys when there is a wheel or on W A S D when there is not,
+with the gears changing by themselves. AI cars can race the two as well.
+
 ## Your own roads
 
 Roads are text files in `tracks/`, read at start in the order of their names, so a new circuit
@@ -199,6 +209,15 @@ or stage needs no code. `tracks/04-skovvej.track` is a good one to start from:
          0      0      10         4.2        0
        300     40      12         4.2        0
     ...
+
+A street circuit adds `setting city`: walls at the kerb with a catch fence, street lamps, a
+town of buildings and square corners. `water x z radius` digs a harbour basin there.
+
+Real streets: `scripts/osm_road.py` makes a street circuit from OpenStreetMap data. Give it the
+map and a few points to pass through, and it routes along drivable roads, rounds the corners,
+and brings the real buildings beside the route (as `block` lines, at their size and height)
+and the river (as `water`). `tracks/08-boulevard.track`, Boulevard Royal, was made so from a
+real city centre: a long boulevard, a turn down an avenue to the river and back along the quay.
 
 The points are in metres and join into a closed loop, so a stage has a road home after its
 finish. Banking is in degrees, positive when the right side is lower. Keep parts of the road
@@ -232,4 +251,6 @@ Work happens on a branch per feature or fix. See [CONTRIBUTING.md](CONTRIBUTING.
 
 ## Licence
 
-MIT: see [LICENSE](LICENSE).
+MIT: see [LICENSE](LICENSE). The Boulevard Royal road file, `tracks/08-boulevard.track`, is
+made from OpenStreetMap data: map data © OpenStreetMap contributors, available under the
+[Open Database Licence](https://www.openstreetmap.org/copyright).

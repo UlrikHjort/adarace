@@ -253,6 +253,32 @@ package body Sim_Loop is
 
    Key_Steer, Key_Throttle, Key_Brake, Key_Clutch : Float := 0.0;
 
+   Key_Steer_2, Key_Throttle_2, Key_Brake_2 : Float := 0.0;
+
+   --  The second player's hands: the arrow keys when the first has the wheel,
+   --  else W A S D
+   procedure Gather_Second (Cycle : Float) is
+      K : constant Keys := Shared.Get_Keys;
+      Arrows : constant Boolean := Wheel.Present;
+      L : constant Boolean := (if Arrows then K.Left else K.Left_2);
+      R : constant Boolean := (if Arrows then K.Right else K.Right_2);
+      T : constant Boolean := (if Arrows then K.Throttle else K.Throttle_2);
+      B : constant Boolean := (if Arrows then K.Brake else K.Brake_2);
+      V : constant Float := Vehicle.Speed (Session.Cars (2));
+      Lock_At : constant Float :=
+        Clamp ((Arctan (0.12) + (Session.Spec.A + Session.Spec.B) * 9.81
+                * Session.Spec.Mu * 0.9 / Float'Max (25.0, V * V))
+               / Session.Spec.Steer_Lock, 0.05, 1.0);
+      Target : constant Float := (if L then -Lock_At elsif R then Lock_At else 0.0);
+      Rate : constant Float := (if L or R then 2.2 else 3.6);
+   begin
+      Key_Steer_2 := Key_Steer_2 + Clamp (Target - Key_Steer_2, -Rate * Cycle, Rate * Cycle);
+      Key_Throttle_2 := Clamp (Key_Throttle_2 + (if T then 5.0 else -9.0) * Cycle, 0.0, 1.0);
+      Key_Brake_2 := Clamp (Key_Brake_2 + (if B then 4.0 else -9.0) * Cycle, 0.0, 1.0);
+      Session.Second_Hands :=
+        (Steer => Key_Steer_2, Throttle => Key_Throttle_2, Brake => Key_Brake_2, others => <>);
+   end Gather_Second;
+
    function Gather (Cycle : Float) return Vehicle.Inputs is
       I : Vehicle.Inputs;
       K : constant Keys := Shared.Get_Keys;
@@ -274,6 +300,12 @@ package body Sim_Loop is
       Key_Brake := Clamp (Key_Brake + (if K.Brake then 4.0 else -9.0) * Cycle, 0.0, 1.0);
       Key_Clutch := Clamp (Key_Clutch + (if K.Clutch then 8.0 else -5.0) * Cycle, 0.0, 1.0);
 
+      --  With two players and a wheel, the arrows belong to the second
+      if Session.Config.Two_Players and then On then
+         Key_Steer := 0.0;
+         Key_Throttle := 0.0;
+         Key_Brake := 0.0;
+      end if;
       I.Steer := (if On then W.Steering else 0.0) + Key_Steer;
       I.Throttle := Float'Max ((if On then W.Throttle else 0.0), Key_Throttle);
       I.Brake := Float'Max ((if On then W.Brake else 0.0), Key_Brake);
@@ -306,6 +338,7 @@ package body Sim_Loop is
             P.Steer := C.Steer;
             P.Speed := Vehicle.Speed (C);
             P.Rpm := C.Rpm;
+            P.Gear := C.Gear;
             for W in Vehicle.Wheel_Id loop
                P.Wheel_Y (W) := C.Wheels (W).Off_Y;
                P.Wheel_Angle (W) := C.Wheels (W).Angle;
@@ -447,6 +480,9 @@ package body Sim_Loop is
                   declare
                      I : Vehicle.Inputs := Gather (0.002);
                   begin
+                     if Session.Config.Two_Players then
+                        Gather_Second (0.002);
+                     end if;
                      Session.Step (I);
                      I.Shift_Up := False;
                      I.Shift_Down := False;

@@ -59,6 +59,35 @@ package Track is
 
    function Loaded return Track_Id;
 
+   function Is_City return Boolean;
+   --  A street circuit: walls at the kerb, buildings behind them, maybe water
+
+   --  Water (a harbour basin, a river), as round pieces, if the road has any
+   Has_Water : Boolean := False;
+   Water_Y : Float := 0.0;
+   Max_Water : constant := 256;
+   type Pool is record
+      X, Z, R : Float := 0.0;
+   end record;
+   type Pool_Array is array (1 .. Max_Water) of Pool;
+   Pools : Pool_Array;
+   Pool_Count : Natural := 0;
+   --  (the first, for those that want one)
+   function Water_X return Float;
+   function Water_Z return Float;
+   function Water_R return Float;
+
+   --  The buildings of a street circuit, each a block standing along the road
+   type Building is record
+      X, Y, Z : Float := 0.0;     --  centre of the footprint, on the ground
+      TX, TZ : Float := 1.0;      --  along the front
+      Len, Depth, Height : Float := 10.0;
+      Tint : Float := 0.0;
+   end record;
+   type Building_Array is array (Positive range <>) of Building;
+   type Building_Access is access Building_Array;
+   Buildings : Building_Access;
+
    function Is_Stage return Boolean;
    --  A rally stage: loose road, no barriers, trees that are really there.
    --  It runs from S = 0 to Stage_End; the road goes on from there back to

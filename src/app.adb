@@ -44,8 +44,10 @@ with GL;
 with GL_Area;
 with Hud;
 with Hud_Layer;
+with Championship;
 with Rally;
 with Recorder;
+with Replay;
 with Renderer;
 with School;
 with Scenery;
@@ -103,6 +105,8 @@ package body App is
 
    Voice_On : Boolean := True;
    Rally_Auto : Boolean := False;
+   Replay_From : Natural := 0;
+   Shot_At_Table : Boolean := False;
    Rally_Wait : Natural := 0;
    Want_Record : Boolean := False;   --  F9: done where the picture is ready
    Record_At, Record_For : Float := 0.0;  --  automated: from when, how long
@@ -317,12 +321,17 @@ package body App is
 
    function In_Rally return Boolean is (Combo_Mode.Get_Active = 3);
 
+   function In_Season return Boolean is (Combo_Mode.Get_Active = 4);
+
+   function Two_Players return Boolean is (Combo_Mode.Get_Active = 5);
+
    function Lesson_Chosen return School.Lesson_Id is
      (School.Lesson_Id (Integer (Combo_Lesson.Get_Active) + 1));
 
    function Drive_Track return Track.Track_Id is
      (if In_School then School.Circuit (Lesson_Chosen)
       elsif In_Rally then Rally.Current_Road
+      elsif In_Season then Championship.Current_Road
       else Chosen_Track);
 
    procedure Begin_Drive is
@@ -337,14 +346,29 @@ package body App is
       elsif not In_Rally then
          Rally.Active := False;
       end if;
+      if In_Season and then In_Menu then
+         Championship.Begin_Season (Natural (Combo_Opp.Get_Active) + 2);
+      elsif not In_Season then
+         Championship.Active := False;
+      end if;
       Store_Knobs;
       Save_Choices;
+      Replay.Clear;
       Sim_Loop.Halt;
       if Shown_Track /= Drive_Track then
          Show_Track (Drive_Track);
       end if;
       S.Mode := (if Track.Is_Stage then Session.Stage
                  elsif Combo_Mode.Get_Active = 0 then Session.Hotlap else Session.Race);
+      if In_Season then
+         S.Mode := Session.Race;
+      end if;
+      S.Two_Players := Two_Players and then not Track.Is_Stage;
+      if S.Two_Players then
+         S.Mode := Session.Race;
+         --  (the second player counts as one of the cars)
+         S.Opponents := Natural'Max (1, S.Opponents);
+      end if;
       S.Kind := Chosen_Car;
       S.Opponents := Natural (Combo_Opp.Get_Active) + 1;
       S.Laps := (case Integer (Combo_Laps.Get_Active) is
@@ -364,6 +388,9 @@ package body App is
                         when 0 => 0.80, when 1 => 0.87, when 2 => 0.93, when others => 0.98);
       if In_School then
          S := School.Prepare (Lesson_Chosen, S);
+      end if;
+      if Env ("ADARACE_LAPS") /= "" then
+         S.Laps := Positive'Value (Env ("ADARACE_LAPS"));
       end if;
       Session.Start (S);
       if In_Rally then
@@ -403,6 +430,31 @@ package body App is
       Start_Button.Grab_Focus;
    end To_Menu;
 
+   --  Watching it again: the race stands still meanwhile
+   Camera_Before : Renderer.Camera_Kind := Renderer.Cockpit;
+   Paused_Before : Boolean := False;
+
+   procedure Toggle_Replay is
+   begin
+      if In_Menu then
+         return;
+      end if;
+      if Replay.Active then
+         Replay.Stop;
+         Options.Camera := Camera_Before;
+         if not Paused_Before then
+            Sim_Loop.Pause (False);
+         end if;
+      elsif Replay.Length > 1.0 then
+         Paused_Before := Sim_Loop.Paused;
+         Sim_Loop.Pause (True);
+         Pause_Box.Hide;
+         Camera_Before := Options.Camera;
+         Options.Camera := Renderer.Trackside;
+         Replay.Start;
+      end if;
+   end Toggle_Replay;
+
    procedure Toggle_Pause is
    begin
       if In_Menu then
@@ -431,7 +483,15 @@ package body App is
    --  At the end of a stage of a rally: on to the next, or home after the last
    procedure Advance_Rally is
    begin
-      if Rally.Active and then Rally.Finished_Stage then
+      if Championship.Active and then Championship.Finished_Round then
+         if Championship.Is_Last then
+            Championship.Active := False;
+            To_Menu;
+         else
+            Championship.Next_Round;
+            Begin_Drive;
+         end if;
+      elsif Rally.Active and then Rally.Finished_Stage then
          if Rally.Is_Last then
             Rally.Active := False;
             To_Menu;
@@ -494,6 +554,34 @@ package body App is
          end if;
          return False;
       end if;
+      --  The replay's own keys while it runs
+      if Replay.Active then
+         if K = GDK_F2 or else K = GDK_Escape then Toggle_Replay;
+         elsif K = GDK_Left then Replay.Seek (-5.0);
+         elsif K = GDK_Right then Replay.Seek (5.0);
+         elsif K = GDK_Up then Replay.Speed := Float'Min (4.0, (if Replay.Speed = 0.0 then 0.25 else Replay.Speed * 2.0));
+         elsif K = GDK_Down then Replay.Speed := (if Replay.Speed <= 0.25 then 0.0 else Replay.Speed / 2.0);
+         elsif K = GDK_space then Replay.Speed := (if Replay.Speed = 0.0 then 1.0 else 0.0);
+         elsif K = GDK_LC_c then Next_Camera;
+         end if;
+         return True;
+      end if;
+      if K = GDK_F2 then
+         Toggle_Replay;
+         return True;
+      end if;
+      --  Two players without a wheel: the second drives on W A S D
+      if Session.Config.Two_Players and then not Sim_Loop.Wheel_Present
+        and then (K = GDK_LC_w or else K = GDK_LC_a or else K = GDK_LC_s or else K = GDK_LC_d)
+      then
+         if K = GDK_LC_w then Keys.Throttle_2 := True;
+         elsif K = GDK_LC_s then Keys.Brake_2 := True;
+         elsif K = GDK_LC_a then Keys.Left_2 := True;
+         else Keys.Right_2 := True;
+         end if;
+         Sim_Loop.Set_Keys (Keys);
+         return True;
+      end if;
       if K = GDK_Left then Keys.Left := True;
       elsif K = GDK_Right then Keys.Right := True;
       elsif K = GDK_Up then Keys.Throttle := True;
@@ -544,6 +632,11 @@ package body App is
       use Gdk.Types.Keysyms;
       K : constant Gdk.Types.Gdk_Key_Type := Event.Keyval;
    begin
+      if K = GDK_LC_w then Keys.Throttle_2 := False;
+      elsif K = GDK_LC_s then Keys.Brake_2 := False;
+      elsif K = GDK_LC_a then Keys.Left_2 := False;
+      elsif K = GDK_LC_d then Keys.Right_2 := False;
+      end if;
       if K = GDK_Left then Keys.Left := False;
       elsif K = GDK_Right then Keys.Right := False;
       elsif K = GDK_Up then Keys.Throttle := False;
@@ -609,8 +702,17 @@ package body App is
                   Begin_Drive;
                when others => null;
             end case;
+         elsif Replay.Active then
+            case B is
+               when Wheel.Options | Cross | Circle => Toggle_Replay;
+               when Pad_Left => Replay.Seek (-5.0);
+               when Pad_Right => Replay.Seek (5.0);
+               when Triangle => Next_Camera;
+               when others => null;
+            end case;
          elsif Sim_Loop.Paused then
             case B is
+               when Triangle => Toggle_Replay;
                when Wheel.Options | Cross => Toggle_Pause;
                when Square =>
                   Sim_Loop.Restart;
@@ -713,8 +815,8 @@ package body App is
       end loop;
       Audio.Set (P);
 
-      --  The co-driver reads the road ahead
-      if Session.Config.Mode = Session.Stage and then Voice_On then
+      --  The co-driver reads the road ahead (not again in a replay)
+      if Session.Config.Mode = Session.Stage and then Voice_On and then not Replay.Active then
          if not F.Laps (1).On_Grid and then not F.Laps (1).Finished then
             Codriver.Update (F.Laps (1).S, F.Speed, Track.Stage_End - F.Laps (1).Progress);
             declare
@@ -802,13 +904,24 @@ package body App is
          end if;
       end if;
       Sim_Loop.Latest (Prev, Cur);
+      if Replay.Active then
+         Replay.Advance (Dt);
+         Replay.Pair (Now_T, Prev, Cur);
+      elsif not In_Menu and then not Sim_Loop.Paused then
+         Replay.Keep (Cur);
+      end if;
       GL.glGetIntegerv (GL.GL_VIEWPORT, Viewport (0)'Address);
       declare
          W : constant Natural := Natural (Viewport (2));
          H : constant Natural := Natural (Viewport (3));
          Opt : Renderer.View_Options := Options;
          Msg : constant String :=
-           (if Now_T < Message_Until then To_String (Message) else "");
+           (if Replay.Active
+            then "REPLAY" & (if Replay.Speed = 0.0 then "  stopped"
+                             elsif Replay.Speed = 1.0 then ""
+                             else " " & Natural'Image (Natural (Replay.Speed * 100.0)) & " %")
+                 & "   <- -> 5 s   up/down speed   space stop   C camera   F2 back"
+            elsif Now_T < Message_Until then To_String (Message) else "");
       begin
          Opt.Dt := Dt;
          if In_Menu then
@@ -819,8 +932,19 @@ package body App is
          end if;
          declare
             T0 : constant Long_Float := Sim_Loop.Now;
+            Halves : constant Boolean :=
+              not In_Menu and then Session.Config.Two_Players and then Cur.Count >= 2;
          begin
-            Renderer.Draw (Prev, Cur, Opt, W, H);
+            Hud.Split := Halves;
+            if Halves then
+               --  Player one above, player two below
+               Renderer.Draw (Prev, Cur, Opt, W, H / 2, Focus => 1, Y0 => H - H / 2);
+               Renderer.Draw (Prev, Cur, Opt, W, H / 2, Focus => 2, Y0 => 0);
+               --  (back to the whole window, which the next frame reads its size from)
+               GL.glViewport (0, 0, GL.GLsizei (W), GL.GLsizei (H));
+            else
+               Renderer.Draw (Prev, Cur, Opt, W, H);
+            end if;
             Time_Scene := Time_Scene + (Sim_Loop.Now - T0);
          end;
          Hud.In_Cockpit := Options.Camera = Renderer.Cockpit;
@@ -849,6 +973,10 @@ package body App is
                Record_For := 0.0;
                Gtk.Main.Main_Quit;
             end if;
+         end if;
+         --  (for the automated checks) a replay started by itself
+         if Replay_From > 0 and then Frame_Count = Replay_From then
+            Toggle_Replay;
          end if;
          Recorder.Frame (W, H);
          Update_Sound (Cur);
@@ -912,6 +1040,19 @@ package body App is
                Ada.Text_IO.Put_Line ("SELF TEST FAILED: the look back button is stuck");
             end if;
          when 820 => Toggle_Look_Back;
+         when 850 =>
+            Toggle_Replay;
+            if not Replay.Active then
+               Ada.Text_IO.Put_Line ("SELF TEST FAILED: no replay to watch");
+            end if;
+         when 880 =>
+            if Replay.Position <= 0.0 then
+               Ada.Text_IO.Put_Line ("SELF TEST FAILED: the replay did not move");
+            end if;
+            Toggle_Replay;
+            if Replay.Active or else Sim_Loop.Paused then
+               Ada.Text_IO.Put_Line ("SELF TEST FAILED: the replay did not end cleanly");
+            end if;
          when 840 =>
             Next_Camera;
             if Options.Look /= 0.0 then
@@ -943,12 +1084,37 @@ package body App is
             end if;
          end;
       end if;
-      --  (for the automated checks) on to the next stage by itself
-      if Rally_Auto and then Rally.Active and then Rally.Finished_Stage then
+      --  A round of the season run: its points go on the table
+      if Championship.Active and then not In_Menu and then not Championship.Finished_Round then
+         declare
+            Prev, Cur : Sim_Loop.Frame;
+         begin
+            Sim_Loop.Latest (Prev, Cur);
+            if Cur.Race_Over then
+               Championship.Finish_Round;
+            end if;
+         end;
+      end if;
+      --  (for the automated checks) a picture of the table when it comes up
+      if Shot_At_Table and then Shot_Frame = 0
+        and then ((Rally.Active and then Rally.Finished_Stage)
+                  or else (Championship.Active and then Championship.Finished_Round))
+      then
+         Shot_Frame := Frame_Count + 40;
+      end if;
+      --  (for the automated checks) on to the next stage or round by itself
+      if Rally_Auto
+        and then ((Rally.Active and then Rally.Finished_Stage)
+                  or else (Championship.Active and then Championship.Finished_Round))
+      then
          Rally_Wait := Rally_Wait + 1;
          if Rally_Wait = 240 then
             Rally_Wait := 0;
-            if Rally.Is_Last then
+            if Championship.Active and then Championship.Is_Last then
+               Ada.Text_IO.Put_Line ("season done, behind the leader by"
+                                     & Championship.Leader_Gap'Image & " points");
+               Gtk.Main.Main_Quit;
+            elsif Rally.Active and then Rally.Is_Last then
                Ada.Text_IO.Put_Line ("rally done, position" & Rally.Position'Image);
                Gtk.Main.Main_Quit;
             else
@@ -1083,7 +1249,7 @@ package body App is
       Combo_Car.Set_Active (0);
       Add_Row ("Car", Combo_Car);
 
-      Make (Combo_Mode, "Mode", "Hot laps, against your ghost|Race against the AI|Driving school|Rally: every stage in turn");
+      Make (Combo_Mode, "Mode", "Hot laps, against your ghost|Race against the AI|Driving school|Rally: every stage in turn|Championship: a race at every circuit|Two players: split screen");
       Gtk_New (Combo_Lesson);
       for L in School.Lesson_Id loop
          Combo_Lesson.Append_Text (School.Title (L));
@@ -1310,6 +1476,10 @@ package body App is
          end if;
       end if;
       Rally_Auto := Env ("ADARACE_RALLY_AUTO") /= "";
+      Shot_At_Table := Env ("ADARACE_SHOT_TABLE") /= "";
+      if Env ("ADARACE_REPLAY_AT") /= "" then
+         Replay_From := Natural'Value (Env ("ADARACE_REPLAY_AT"));
+      end if;
       if Env ("ADARACE_WEATHER") /= "" then
          Combo_Weather.Set_Active (Gint'Value (Env ("ADARACE_WEATHER")));
       end if;

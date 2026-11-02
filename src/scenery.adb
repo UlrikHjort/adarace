@@ -839,6 +839,141 @@ package body Scenery is
       end loop;
    end Broadleaf;
 
+   --  A street circuit: concrete walls with adverts and a catch fence, lamp
+   --  posts along the kerb, the buildings, and the harbour
+   procedure Build_City (O : in out Builder) is
+      Concrete : constant Color := (0.62, 0.62, 0.60);
+      Pole : constant Color := (0.22, 0.23, 0.25);
+      Ad_Cols : constant array (0 .. 5) of Color :=
+        ((0.04, 0.12, 0.34), (0.58, 0.42, 0.05), (0.42, 0.06, 0.05),
+         (0.04, 0.24, 0.13), (0.09, 0.09, 0.10), (0.62, 0.62, 0.60));
+      Up : constant Vec3 := (0.0, 1.0, 0.0);
+   begin
+      for Side in 0 .. 1 loop
+         declare
+            Sign : constant Float := (if Side = 0 then -1.0 else 1.0);
+         begin
+            for I in 0 .. Track.Count - 1 loop
+               declare
+                  J : constant Natural := Track.Next (I);
+                  S : Track.Sample renames Track.Samples (I);
+                  SJ : Track.Sample renames Track.Samples (J);
+                  WI : constant Float := Sign * (if Sign > 0.0 then S.Wall_R else S.Wall_L);
+                  WJ : constant Float := Sign * (if Sign > 0.0 then SJ.Wall_R else SJ.Wall_L);
+                  A0 : constant Vec3 := Point_At (I, WI);
+                  B0 : constant Vec3 := Point_At (J, WJ);
+                  ToR : constant Vec3 := ((-Sign) * S.RX, 0.0, (-Sign) * S.RZ);
+                  B : Builder renames TB (Tile_X (A0.X), Tile_Z (A0.Z));
+                  Band : constant Natural := I / 10;
+                  H : constant := 1.15;
+                  U0 : constant Float := Float (I) * Track.Spacing;
+                  U1 : constant Float := U0 + Track.Spacing;
+               begin
+                  --  The wall's face and top
+                  Add (B, (A0, ToR, Concrete.R, Concrete.G, Concrete.B, Plain, U0, 0.0));
+                  Add (B, (B0, ToR, Concrete.R, Concrete.G, Concrete.B, Plain, U1, 0.0));
+                  Add (B, (B0 + H * Up, ToR, Concrete.R, Concrete.G, Concrete.B, Plain, U1, H));
+                  Add (B, (A0, ToR, Concrete.R, Concrete.G, Concrete.B, Plain, U0, 0.0));
+                  Add (B, (B0 + H * Up, ToR, Concrete.R, Concrete.G, Concrete.B, Plain, U1, H));
+                  Add (B, (A0 + H * Up, ToR, Concrete.R, Concrete.G, Concrete.B, Plain, U0, H));
+                  Quad (B, A0 + H * Up, B0 + H * Up, B0 + H * Up + (-0.5) * ToR,
+                        A0 + H * Up + (-0.5) * ToR, Concrete);
+                  --  An advert along the top, now and then
+                  if Band mod 3 = 0 then
+                     declare
+                        C : constant Color := Ad_Cols (Band mod 6);
+                        V1 : constant := 0.9;
+                        F : constant Vec3 := (0.04 * ToR) + (H + 0.05) * Up;
+                     begin
+                        Add (B, (A0 + F, ToR, C.R, C.G, C.B, Board, U0, 0.0));
+                        Add (B, (B0 + F, ToR, C.R, C.G, C.B, Board, U1, 0.0));
+                        Add (B, (B0 + F + V1 * Up, ToR, C.R, C.G, C.B, Board, U1, V1));
+                        Add (B, (A0 + F, ToR, C.R, C.G, C.B, Board, U0, 0.0));
+                        Add (B, (B0 + F + V1 * Up, ToR, C.R, C.G, C.B, Board, U1, V1));
+                        Add (B, (A0 + F + V1 * Up, ToR, C.R, C.G, C.B, Board, U0, V1));
+                     end;
+                  end if;
+                  --  The catch fence above it
+                  Add (B, (A0 + 2.1 * Up, ToR, 0.3, 0.3, 0.32, Fence, U0, 2.1));
+                  Add (B, (B0 + 2.1 * Up, ToR, 0.3, 0.3, 0.32, Fence, U1, 2.1));
+                  Add (B, (B0 + 4.2 * Up, ToR, 0.3, 0.3, 0.32, Fence, U1, 4.2));
+                  Add (B, (A0 + 2.1 * Up, ToR, 0.3, 0.3, 0.32, Fence, U0, 2.1));
+                  Add (B, (B0 + 4.2 * Up, ToR, 0.3, 0.3, 0.32, Fence, U1, 4.2));
+                  Add (B, (A0 + 4.2 * Up, ToR, 0.3, 0.3, 0.32, Fence, U0, 4.2));
+                  if I mod 5 = 0 then
+                     Oriented_Box (B, A0 + 2.1 * Up + (-0.1) * ToR, Up, ToR, 2.1, 0.05, 0.05, Pole);
+                  end if;
+                  --  Street lamps over the road, every 30 m on alternate sides
+                  if I mod 15 = (if Side = 0 then 0 else 7) then
+                     declare
+                        Foot : constant Vec3 := A0 + (-0.6) * ToR;
+                        Arm : constant Vec3 := Foot + 8.0 * Up + 1.6 * ToR;
+                     begin
+                        Oriented_Box (B, Foot + 4.0 * Up, Up, ToR, 4.0, 0.09, 0.09, Pole);
+                        Oriented_Box (B, Foot + 8.0 * Up + 0.8 * ToR, ToR, Up, 0.8, 0.05, 0.05, Pole);
+                        Box (B, Arm + Vec3'(-0.35, -0.12, -0.35), Arm + Vec3'(0.35, 0.02, 0.35),
+                             (1.6, 1.3, 0.8), Glow);
+                     end;
+                  end if;
+               end;
+            end loop;
+         end;
+      end loop;
+
+      --  The buildings: four fronts with windows, and a flat roof
+      for Bd of Track.Buildings.all loop
+         declare
+            Along : constant Vec3 := (Bd.TX, 0.0, Bd.TZ);
+            Side : constant Vec3 := (-Bd.TZ, 0.0, Bd.TX);
+            C : constant Vec3 := (Bd.X, Bd.Y - 1.0, Bd.Z);
+            HL : constant Float := Bd.Len / 2.0;
+            HD : constant Float := Bd.Depth / 2.0;
+            Top : constant Float := Bd.Height + 1.0;
+            B : Builder renames TB (Tile_X (Bd.X), Tile_Z (Bd.Z));
+            T : constant Float := Bd.Tint;
+            Roof : constant Color := (0.16, 0.16, 0.17);
+            procedure Front (P0, P1 : Vec3; Width : Float) is
+               N : constant Vec3 := Normalize (Cross (P1 - P0, Up));
+            begin
+               Add (B, (P0, N, T, 0.0, 0.0, Facade, 0.0, -1.0));
+               Add (B, (P1, N, T, 0.0, 0.0, Facade, Width, -1.0));
+               Add (B, (P1 + Top * Up, N, T, 0.0, 0.0, Facade, Width, Top - 1.0));
+               Add (B, (P0, N, T, 0.0, 0.0, Facade, 0.0, -1.0));
+               Add (B, (P1 + Top * Up, N, T, 0.0, 0.0, Facade, Width, Top - 1.0));
+               Add (B, (P0 + Top * Up, N, T, 0.0, 0.0, Facade, 0.0, Top - 1.0));
+            end Front;
+            K00 : constant Vec3 := C + (-HL) * Along + (-HD) * Side;
+            K10 : constant Vec3 := C + HL * Along + (-HD) * Side;
+            K11 : constant Vec3 := C + HL * Along + HD * Side;
+            K01 : constant Vec3 := C + (-HL) * Along + HD * Side;
+         begin
+            Front (K10, K00, Bd.Len);
+            Front (K11, K10, Bd.Depth);
+            Front (K01, K11, Bd.Len);
+            Front (K00, K01, Bd.Depth);
+            Quad (B, K00 + Top * Up, K01 + Top * Up, K11 + Top * Up, K10 + Top * Up, Roof);
+         end;
+      end loop;
+
+      --  Water: a harbour basin, a river, each round piece a square on it
+      for K in 1 .. Track.Pool_Count loop
+         declare
+            R : constant Float := Track.Pools (K).R + 20.0;
+            X : constant Float := Track.Pools (K).X;
+            Z : constant Float := Track.Pools (K).Z;
+            Y : constant Float := Track.Water_Y;
+            N : constant Vec3 := (0.0, 1.0, 0.0);
+         begin
+            Add (O, ((X - R, Y, Z - R), N, 0.0, 0.0, 0.0, Water, 0.0, 0.0));
+            Add (O, ((X - R, Y, Z + R), N, 0.0, 0.0, 0.0, Water, 0.0, 0.0));
+            Add (O, ((X + R, Y, Z + R), N, 0.0, 0.0, 0.0, Water, 0.0, 0.0));
+            Add (O, ((X - R, Y, Z - R), N, 0.0, 0.0, 0.0, Water, 0.0, 0.0));
+            Add (O, ((X + R, Y, Z + R), N, 0.0, 0.0, 0.0, Water, 0.0, 0.0));
+            Add (O, ((X + R, Y, Z - R), N, 0.0, 0.0, 0.0, Water, 0.0, 0.0));
+         end;
+      end loop;
+   end Build_City;
+
    procedure Build_Trees is
    begin
       for T of Track.Trees.all loop
@@ -939,6 +1074,9 @@ package body Scenery is
       Build_Edges (R, G);
       if Track.Is_Stage then
          Build_Stage (O, R);
+      elsif Track.Is_City then
+         Build_City (O);
+         Build_Start (O, R);
       else
          Build_Barriers;
          Build_Start (O, R);

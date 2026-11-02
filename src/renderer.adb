@@ -48,11 +48,12 @@ package body Renderer is
    S_LVP, S_Model : GLint := 0;
    K_Inv, K_Cam, K_Sun, K_Sun_C, K_Sky_C, K_Hor, K_Time, K_Clouds : GLint := 0;
    P_Rect, P_Flip, P_Scene, P_Vig, P_Exp : GLint := 0;
-   U_Grain, U_Forest, P_Bloom : GLint := -1;
+   U_Grain, U_Forest, U_City, P_Bloom : GLint := -1;
    U_Wet, U_Snow, U_Season, U_Car_V, U_Head_On, U_Head_N, U_Head_Pow : GLint := -1;
    U_Head_Pos, U_Head_Dir : array (1 .. Session.Max_Cars) of GLint := (others => -1);
    K_Mist, P_Rain, P_Time : GLint := -1;
    Guide_On : Boolean := False;
+   Focus_Car : Positive := 1;    --  whose view is being drawn
    U_Dirt, U_Dent, U_Dial_Rpm, U_Dial_Speed, U_Dial_Gear : GLint := -1;
    Dirt_Level : Float := 0.0;     --  how filthy the player's car has got
    Dent_Level : Float := 0.0;
@@ -256,6 +257,7 @@ package body Renderer is
       P_Time := Location (Post_P, "uTime");
       U_Grain := Location (World_P, "uGrain");
       U_Forest := Location (World_P, "uForest");
+      U_City := Location (World_P, "uCity");
       P_Bloom := Location (Post_P, "uBloom");
       Textures.Create;
       glUseProgram (World_P);
@@ -491,6 +493,7 @@ package body Renderer is
       M : constant Mat4 := Car_Matrix (P);
       Paint : constant Vec3 :=
         (if I = 1 then (Session.Spec.Paint_R, Session.Spec.Paint_G, Session.Spec.Paint_B)
+         elsif I = 2 and then Session.Config.Two_Players then (0.85, 0.32, 0.02)
          else Paints (I));
    begin
       Shaders.Set (U_Paint, Paint);
@@ -799,6 +802,7 @@ package body Renderer is
 
       Shaders.Set (U_Grain, Float'(1.0));
       Shaders.Set (U_Forest, Float'(if Track.Is_Stage then 1.0 else 0.0));
+      Shaders.Set (U_City, Float'(if Track.Is_City then 1.0 else 0.0));
       Shaders.Set (U_Dirt, Float'(0.0));
       Shaders.Set (U_Dent, Float'(0.0));
       Shaders.Set (U_Wet, Track.Wet);
@@ -846,14 +850,14 @@ package body Renderer is
       --  The cars move: world-fixed grain would swim over them
       Shaders.Set (U_Grain, Float'(0.0));
       for I in 1 .. Count loop
-         if I > 1 or else not Hide_Own then
+         if I /= Focus_Car or else not Hide_Own then
             Draw_Car (I, Poses (I), Kind, True);
          end if;
       end loop;
 
       if Cockpit_On then
          declare
-            M : constant Mat4 := Car_Matrix (Poses (1));
+            M : constant Mat4 := Car_Matrix (Poses (Focus_Car));
          begin
             Shaders.Set (U_Paint, Vec3'(Session.Spec.Paint_R, Session.Spec.Paint_G, Session.Spec.Paint_B));
             Shaders.Set (U_Brake, Float'(0.0));
@@ -910,7 +914,7 @@ package body Renderer is
       Shaders.Set (S_LVP, Light);
       Shaders.Set (S_Model, Identity);
       Mesh.Draw (Scenery.Static);
-      Scenery.Draw_Near (Poses (1).X, Poses (1).Z, (if Index = 1 then Near_Half * 1.2 else Far_Half * 1.1));
+      Scenery.Draw_Near (Poses (Focus_Car).X, Poses (Focus_Car).Z, (if Index = 1 then Near_Half * 1.2 else Far_Half * 1.1));
       if Index = 2 then
          return;   --  (the cars are only in the near map)
       end if;
@@ -942,7 +946,8 @@ package body Renderer is
       Pan := Clamp ((DX * RX + DZ * RZ) / D, -1.0, 1.0);
    end Hearing;
 
-   procedure Draw (A, B : Sim_Loop.Frame; Options : View_Options; Width, Height : Natural) is
+   procedure Draw (A, B : Sim_Loop.Frame; Options : View_Options; Width, Height : Natural;
+                   Focus : Positive := 1; Y0 : Natural := 0) is
       GTK_FB : aliased GLint := 0;
       Now_T : constant Long_Float := Sim_Loop.Now;
       Span : constant Long_Float := B.Time - A.Time;
@@ -958,7 +963,10 @@ package body Renderer is
       Aspect : constant Float := Float (Width) / Float (Natural'Max (Height, 1));
    begin
       glGetIntegerv (GL_FRAMEBUFFER_BINDING, GTK_FB'Address);
-      Clock_T := Clock_T + Dt;
+      Focus_Car := Focus;
+      if Focus = 1 then
+         Clock_T := Clock_T + Dt;
+      end if;
       Guide_On := Options.Guide;
       --  Dirt gathers on loose ground and washes off in rain; a fresh start is clean
       if B.Laps (1).Lap_Time < 0.05 and then B.Laps (1).Lap = 0 then
@@ -970,9 +978,9 @@ package body Renderer is
       end if;
       Dent_Level := B.Dmg_Aero;
       glUseProgram (World_P);
-      Shaders.Set (U_Dial_Rpm, B.Rpm / Float'Max (1000.0, B.Red_Line + 1800.0));
-      Shaders.Set (U_Dial_Speed, B.Speed * 3.6 / 320.0);
-      Shaders.Set (U_Dial_Gear, Float (B.Gear));
+      Shaders.Set (U_Dial_Rpm, B.Poses (Focus).Rpm / Float'Max (1000.0, B.Red_Line + 1800.0));
+      Shaders.Set (U_Dial_Speed, B.Poses (Focus).Speed * 3.6 / 320.0);
+      Shaders.Set (U_Dial_Gear, Float (B.Poses (Focus).Gear));
       Car_Speed := B.Speed;
       Lights_On := Dim;
       for I in 1 .. B.Count loop
@@ -984,7 +992,7 @@ package body Renderer is
 
       --  Camera ---------------------------------------------------------------
       declare
-         P : Sim_Loop.Car_Pose renames Poses (1);
+         P : Sim_Loop.Car_Pose renames Poses (Focus);
          M : constant Mat4 := Car_Matrix (P);
          Eye : Vec3;
          Tgt : Vec3;
@@ -1107,7 +1115,9 @@ package body Renderer is
             end if;
             glDisable (GL_POLYGON_OFFSET_FILL);
 
-            Update_Effects (B, Dt);
+            if Focus = 1 then
+               Update_Effects (B, Dt);
+            end if;
             Fall_Eye := Eye;
             declare
                Dir : constant Vec3 := Tgt - Eye;
@@ -1141,7 +1151,9 @@ package body Renderer is
             glViewport (0, 0, GLsizei (Width), GLsizei (Height));
             glClear (GL_DEPTH_BUFFER_BIT or GL_COLOR_BUFFER_BIT);
             Scene (Poses, B.Count, VP, Eye, Sky, Clock_T, LN, Far_Matrix, Own_Hidden, In_Cockpit,
-                   B.Steer_In, Ghost, Show_Ghost);
+                   (if Focus = 1 then B.Steer_In
+                    else Poses (Focus).Steer / Session.Spec.Steer_Lock),
+                   Ghost, Show_Ghost and then Focus = 1);
             Draw_Effects (VP, Height, Cam_Fov, Sky);
          end;
       end;
@@ -1152,7 +1164,7 @@ package body Renderer is
       glBlitFramebuffer (0, 0, GLint (Width), GLint (Height), 0, 0, GLint (Width), GLint (Height),
                          GL_COLOR_BUFFER_BIT, GL_NEAREST);
       glBindFramebuffer (GL_FRAMEBUFFER, GLuint (GTK_FB));
-      glViewport (0, 0, GLsizei (Width), GLsizei (Height));
+      glViewport (0, GLint (Y0), GLsizei (Width), GLsizei (Height));
       glDisable (GL_DEPTH_TEST);
       glDisable (GL_CULL_FACE);
       glClipControl (GL_LOWER_LEFT, GL_NEGATIVE_ONE_TO_ONE);
@@ -1192,7 +1204,8 @@ package body Renderer is
             Shaders.Set (P_Rain, Float'(0.0));
             Shaders.Set (P_Vig, Float'(0.0));
             glEnable (GL_SCISSOR_TEST);
-            glScissor (GLint ((0.5 - MW / 2.0) * Float (Width)), GLint ((0.975 - MH) * Float (Height)),
+            glScissor (GLint ((0.5 - MW / 2.0) * Float (Width)),
+                       GLint (Y0) + GLint ((0.975 - MH) * Float (Height)),
                        GLsizei (MW * Float (Width)), GLsizei (MH * Float (Height)));
             glDrawArrays (GL_TRIANGLES, 0, 3);
             glDisable (GL_SCISSOR_TEST);

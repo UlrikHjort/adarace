@@ -30,6 +30,7 @@ package Session is
       Weather  : Weather_Kind := Clear;
       Season   : Season_Kind := Summer;
       No_Records : Boolean := False;   --  a lesson: nothing saved, no ghost
+      Two_Players : Boolean := False;  --  car 2 is the second player's
    end record;
 
    type Sector_Array is array (0 .. 2) of Float;
@@ -97,6 +98,9 @@ package Session is
 
    procedure Reset_Player;
    --  Back onto the racing line, stopped (costs the lap; on a stage, time)
+
+   Second_Hands : Vehicle.Inputs;
+   --  The second player's controls, in a race of two players (car 2)
 
    Force_AI : Boolean := False;
    --  (for the tests) the AI drives the player's car, under the player's rules
