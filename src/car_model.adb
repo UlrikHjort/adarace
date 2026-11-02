@@ -124,6 +124,7 @@ package body Car_Model is
    end At_Z;
 
    Ring_Points : constant := 12;
+   Fine : constant := 2 * Ring_Points - 1;   --  with a point between each two
 
    --  The right half of a cross section, from under the car over to the top
    function Ring_Point (S : Station; K : Natural) return Vec3 is
@@ -159,7 +160,7 @@ package body Car_Model is
       Slices : constant := 90;
       First_Z : constant Float := Profile (Profile'First).Z;
       Last_Z : constant Float := Profile (Profile'Last).Z;
-      type Grid is array (0 .. Slices, 0 .. Ring_Points - 1) of Vec3;
+      type Grid is array (0 .. Slices, 0 .. Fine - 1) of Vec3;
       type Grid_Access is access Grid;
       P : constant Grid_Access := new Grid;
       N : constant Grid_Access := new Grid;
@@ -192,18 +193,34 @@ package body Car_Model is
          declare
             S : constant Station := At_Z (Z_Of (I), Kind);
          begin
-            for K in 0 .. Ring_Points - 1 loop
-               P (I, K) := Ring_Point (S, K);
+            --  Every other point between those of the section, on a curve
+            --  through them: round shoulders instead of facets
+            for F in 0 .. Fine - 1 loop
+               if F mod 2 = 0 then
+                  P (I, F) := Ring_Point (S, F / 2);
+               else
+                  declare
+                     K : constant Natural := F / 2;
+                     function R (J : Integer) return Vec3 is
+                       (Ring_Point (S, Natural (Integer'Max (0, Integer'Min (Ring_Points - 1, J)))));
+                     P0 : constant Vec3 := R (K - 1);
+                     P1 : constant Vec3 := R (K);
+                     P2 : constant Vec3 := R (K + 1);
+                     P3 : constant Vec3 := R (K + 2);
+                  begin
+                     P (I, F) := 0.5625 * (P1 + P2) - 0.0625 * (P0 + P3);
+                  end;
+               end if;
             end loop;
          end;
       end loop;
       --  Smooth normals: pointing out of the grid
       for I in 0 .. Slices loop
-         for K in 0 .. Ring_Points - 1 loop
+         for K in 0 .. Fine - 1 loop
             declare
                A : constant Vec3 := P (Natural'Min (I + 1, Slices), K)
                  - P (Natural'Max (I, 1) - 1, K);
-               C : constant Vec3 := P (I, Natural'Min (K + 1, Ring_Points - 1))
+               C : constant Vec3 := P (I, Natural'Min (K + 1, Fine - 1))
                  - P (I, Natural'Max (K, 1) - 1);
                Nr : constant Vec3 := Cross (C, A);
             begin
@@ -218,16 +235,17 @@ package body Car_Model is
             S : constant Station := At_Z (Zm, Kind);
             Cabin : constant Boolean := S.Roof > S.Belt + 0.05;
          begin
-            for K in 0 .. Ring_Points - 2 loop
+            for F in 0 .. Fine - 2 loop
                declare
-                  P00 : constant Vec3 := P (I, K);
-                  P10 : constant Vec3 := P (I + 1, K);
-                  P11 : constant Vec3 := P (I + 1, K + 1);
-                  P01 : constant Vec3 := P (I, K + 1);
-                  N00 : constant Vec3 := N (I, K);
-                  N10 : constant Vec3 := N (I + 1, K);
-                  N11 : constant Vec3 := N (I + 1, K + 1);
-                  N01 : constant Vec3 := N (I, K + 1);
+                  K : constant Natural := F / 2;   --  the section's own band
+                  P00 : constant Vec3 := P (I, F);
+                  P10 : constant Vec3 := P (I + 1, F);
+                  P11 : constant Vec3 := P (I + 1, F + 1);
+                  P01 : constant Vec3 := P (I, F + 1);
+                  N00 : constant Vec3 := N (I, F);
+                  N10 : constant Vec3 := N (I + 1, F);
+                  N11 : constant Vec3 := N (I + 1, F + 1);
+                  N01 : constant Vec3 := N (I, F + 1);
                   Mid : constant Vec3 := 0.25 * (P00 + P10 + P11 + P01);
                   Is_Under : constant Boolean := K = 0;
                   --  Side windows above the belt, between the pillars
@@ -307,9 +325,9 @@ package body Car_Model is
             Out_N : constant Vec3 := (0.0, 0.0, (if End_I = 0 then -1.0 else 1.0));
             Col : constant Color := (if End_I = 0 then Black else (0.0, 0.0, 0.0));
             Cap_Mat : constant Float := (if End_I = 0 then Plain else Mesh.Paint);
-            Mid : constant Vec3 := (0.0, 0.5 * (P (I, 0).Y + P (I, Ring_Points - 1).Y), P (I, 0).Z);
+            Mid : constant Vec3 := (0.0, 0.5 * (P (I, 0).Y + P (I, Fine - 1).Y), P (I, 0).Z);
          begin
-            for K in 0 .. Ring_Points - 2 loop
+            for K in 0 .. Fine - 2 loop
                if End_I = 0 then
                   Add (B, (Mid, Out_N, Col.R, Col.G, Col.B, Cap_Mat, 0.0, 0.0));
                   Add (B, (P (I, K + 1), Out_N, Col.R, Col.G, Col.B, Cap_Mat, 0.0, 0.0));
@@ -349,6 +367,25 @@ package body Car_Model is
          Box (B, (-0.90, 0.62, Axle - 0.30), (-0.56, 0.745, Axle + 0.30), Black);
          Box (B, (0.56, 0.62, Axle - 0.30), (0.90, 0.745, Axle + 0.30), Black);
       end loop;
+
+      --  Brake calipers, seen through the spokes: red on the fast ones
+      declare
+         Sp : constant Spec := Spec_Of (Kind);
+         Caliper : constant Color :=
+           (if Kind in Race_GT3 | Hyper_AWD then (0.62, 0.05, 0.03)
+            elsif Kind = Rally_4WD then (0.75, 0.55, 0.05) else (0.05, 0.05, 0.06));
+      begin
+         for Corner in 0 .. 3 loop
+            declare
+               Z : constant Float := (if Corner < 2 then Front_Axle_Z else Rear_Axle_Z);
+               Half : constant Float := (if Corner < 2 then Sp.Track_F else Sp.Track_R) / 2.0;
+               X : constant Float := (if Corner mod 2 = 0 then -1.0 else 1.0) * (Half - 0.13);
+               Y : constant Float := Sp.Radius;
+            begin
+               Box (B, (X - 0.035, Y + 0.02, Z - 0.17), (X + 0.035, Y + 0.17, Z - 0.02), Caliper);
+            end;
+         end loop;
+      end;
 
       --  Door mirrors
       for Sg in 0 .. 1 loop
