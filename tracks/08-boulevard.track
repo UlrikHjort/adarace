@@ -1,10 +1,10 @@
 # An AdaRace road, made by scripts/osm_road.py from OpenStreetMap data.
 # Map data (c) OpenStreetMap contributors, under the Open Database Licence
 # (ODbL 1.0): https://www.openstreetmap.org/copyright
-name Paris: Champs-Elysees (street circuit)
+name Boulevard Royal (street circuit)
 kind circuit
 setting city
-# Up the Champs-Elysees from Concorde, down the Avenue George V to Alma, back along the Seine
+# A long boulevard, a turn down an avenue to the river, and back along the quay
 water 152 328 70
 water 79 297 70
 water 5 266 70
