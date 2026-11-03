@@ -1,3 +1,4 @@
+with Ada.Calendar;
 --  AdaRace: a driving simulator in Ada
 --  Copyright (c) 2026 Ulrik Hørlyk Hjort
 --  SPDX-License-Identifier: MIT
@@ -72,8 +73,17 @@ procedure Simtest is
       Min_Sep : Float := Float'Last;
       Min_Room : Float := Float'Last;
       Min_Gap : Float := Float'Last;   --  between the barriers of two parts of the road
+      Built_In : Duration;
    begin
-      Track.Load (T);
+      declare
+         use Ada.Calendar;
+         T0 : constant Time := Clock;
+      begin
+         Track.Load (T);
+         Built_In := Clock - T0;
+      end;
+      --  (the menu builds it while you wait)
+      Check (Built_In < 5.0, Track.Name (T) & " is built in" & Duration'Image (Built_In) & " s");
       Min_Y := Track.Samples (0).Y;
       Max_Y := Min_Y;
       for I in 0 .. Track.Count - 1 loop
@@ -2049,6 +2059,19 @@ begin
       Ada.Directories.Delete_Tree (Ada.Environment_Variables.Value ("HOME"));
    end if;
    --  ADARACE_ONLY=bike: just the motorcycle, while tuning it
+   --  ADARACE_ONLY=load: how long each road takes to build
+   if Ada.Environment_Variables.Value ("ADARACE_ONLY", "") = "load" then
+      for T in 1 .. Track.Track_Count loop
+         declare
+            use Ada.Calendar;
+            T0 : constant Time := Clock;
+         begin
+            Track.Load (T);
+            Put_Line (Track.Name (T) & ":" & Duration'Image (Clock - T0) & " s");
+         end;
+      end loop;
+      return;
+   end if;
    --  ADARACE_ONLY=track:N: one road, its shape and the AI round it in everything
    declare
       Only : constant String := Ada.Environment_Variables.Value ("ADARACE_ONLY", "");
