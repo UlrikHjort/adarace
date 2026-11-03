@@ -730,20 +730,116 @@ package body Track is
             X, Z, Y : Float;
          end record;
          C : array (0 .. N - 1) of Coarse;
+
+         --  The road's points in buckets 64 m square, so that a patch of
+         --  ground only looks at the road near it
+         Bucket : constant := 64.0;
+         BX : constant Natural := Natural (Float (Grid_NX) * Grid_Cell / Bucket) + 1;
+         BZ : constant Natural := Natural (Float (Grid_NZ) * Grid_Cell / Bucket) + 1;
+         type Index_Array is array (Natural range <>) of Integer;
+         type Index_Access is access Index_Array;
+         procedure Free_I is new Ada.Unchecked_Deallocation (Index_Array, Index_Access);
+         Head : Index_Access := new Index_Array'(0 .. BX * BZ - 1 => -1);
+         Link : Index_Access := new Index_Array'(0 .. N - 1 => -1);
+
+         function Bucket_X (X : Float) return Integer is
+           (Integer (Float'Floor ((X - Grid_X0) / Bucket)));
+         function Bucket_Z (Z : Float) return Integer is
+           (Integer (Float'Floor ((Z - Grid_Z0) / Bucket)));
+
+         --  The road's height as the ground feels it at X Z, weighted by
+         --  the inverse fourth power of the distance; and the nearest point
+         procedure Feel (X, Z : Float; Reach : Float; Best : in out Float; Road : out Float) is
+            Sum_W, Sum_H : Float := 0.0;
+            CX : constant Integer := Bucket_X (X);
+            CZ : constant Integer := Bucket_Z (Z);
+            R : constant Integer := Integer (Float'Ceiling (Reach / Bucket));
+            --  (the weights fade to nothing at the reach, so the ground has no creases)
+            Fade : constant Float := 1.0 / ((Reach * Reach + 16.0) ** 2);
+         begin
+            for IZ in Integer'Max (0, CZ - R) .. Integer'Min (BZ - 1, CZ + R) loop
+               for IX in Integer'Max (0, CX - R) .. Integer'Min (BX - 1, CX + R) loop
+                  declare
+                     K : Integer := Head (IZ * BX + IX);
+                  begin
+                     while K >= 0 loop
+                        declare
+                           D2 : constant Float := (C (K).X - X) ** 2 + (C (K).Z - Z) ** 2 + 16.0;
+                           W  : constant Float := 1.0 / (D2 * D2) - Fade;
+                        begin
+                           if W > 0.0 then
+                              Sum_W := Sum_W + W;
+                              Sum_H := Sum_H + W * C (K).Y;
+                           end if;
+                           Best := Float'Min (Best, D2);
+                        end;
+                        K := Link (K);
+                     end loop;
+                  end;
+               end loop;
+            end loop;
+            Road := (if Sum_W > 0.0 then Sum_H / Sum_W else 0.0);
+         end Feel;
+
+         Far_Enough : constant := 260.0;
+
+         --  The nearest point of the road, ring by ring outwards
+         function Nearest (X, Z : Float) return Float is
+            Best : Float := Float'Last;
+            CX : constant Integer := Bucket_X (X);
+            CZ : constant Integer := Bucket_Z (Z);
+         begin
+            for Ring in 0 .. Integer'Max (BX, BZ) loop
+               for IZ in CZ - Ring .. CZ + Ring loop
+                  for IX in CX - Ring .. CX + Ring loop
+                     if (abs (IZ - CZ) = Ring or else abs (IX - CX) = Ring)
+                       and then IZ in 0 .. BZ - 1 and then IX in 0 .. BX - 1
+                     then
+                        declare
+                           K : Integer := Head (IZ * BX + IX);
+                        begin
+                           while K >= 0 loop
+                              Best := Float'Min
+                                (Best, (C (K).X - X) ** 2 + (C (K).Z - Z) ** 2 + 16.0);
+                              K := Link (K);
+                           end loop;
+                        end;
+                     end if;
+                  end loop;
+               end loop;
+               --  Nothing in a further ring can be nearer than this; and
+               --  beyond 260 m how far makes no difference to the ground
+               exit when (Best < Float'Last and then Sqrt (Best) < Float (Ring) * Bucket)
+                 or else Float (Ring) * Bucket > Far_Enough;
+            end loop;
+            return Float'Min (Best, Far_Enough ** 2);
+         end Nearest;
+
+         --  Far from the road the ground's base changes slowly: worked out
+         --  every 40 m over all of the road, and blended in
+         Step : constant := 8;
+         CNX : constant Natural := (Grid_NX - 1) / Step + 2;
+         CNZ : constant Natural := (Grid_NZ - 1) / Step + 2;
+         type Float_Array is array (Natural range <>) of Float;
+         type Float_Access is access Float_Array;
+         procedure Free_F is new Ada.Unchecked_Deallocation (Float_Array, Float_Access);
+         Base : Float_Access := new Float_Array (0 .. CNX * CNZ - 1);
       begin
          for I in C'Range loop
             C (I) := (Samples (I * Stride).X, Samples (I * Stride).Z, Samples (I * Stride).Y);
+            declare
+               B : constant Integer := Bucket_Z (C (I).Z) * BX + Bucket_X (C (I).X);
+            begin
+               Link (I) := Head (B);
+               Head (B) := I;
+            end;
          end loop;
-         for IZ in 0 .. Grid_NZ - 1 loop
-            for IX in 0 .. Grid_NX - 1 loop
+         for JZ in 0 .. CNZ - 1 loop
+            for JX in 0 .. CNX - 1 loop
                declare
-                  X : constant Float := Grid_X0 + Float (IX) * Grid_Cell;
-                  Z : constant Float := Grid_Z0 + Float (IZ) * Grid_Cell;
+                  X : constant Float := Grid_X0 + Float (JX * Step) * Grid_Cell;
+                  Z : constant Float := Grid_Z0 + Float (JZ * Step) * Grid_Cell;
                   Sum_W, Sum_H : Float := 0.0;
-                  Best : Float := Float'Last;
-                  Hills : constant Float :=
-                    (Fbm (X / 340.0, Z / 340.0, 4) - 0.5) * 70.0
-                    + (Fbm (X / 60.0 + 40.0, Z / 60.0, 3) - 0.5) * 5.0;
                begin
                   for K in C'Range loop
                      declare
@@ -752,9 +848,39 @@ package body Track is
                      begin
                         Sum_W := Sum_W + W;
                         Sum_H := Sum_H + W * C (K).Y;
-                        Best := Float'Min (Best, D2);
                      end;
                   end loop;
+                  Base (JZ * CNX + JX) := Sum_H / Sum_W;
+               end;
+            end loop;
+         end loop;
+         for IZ in 0 .. Grid_NZ - 1 loop
+            for IX in 0 .. Grid_NX - 1 loop
+               declare
+                  X : constant Float := Grid_X0 + Float (IX) * Grid_Cell;
+                  Z : constant Float := Grid_Z0 + Float (IZ) * Grid_Cell;
+                  Best : Float := Nearest (X, Z);
+                  D0 : constant Float := Sqrt (Best);
+                  Hills : constant Float :=
+                    (Fbm (X / 340.0, Z / 340.0, 4) - 0.5) * 70.0
+                    + (Fbm (X / 60.0 + 40.0, Z / 60.0, 3) - 0.5) * 5.0;
+                  --  The base far off, between its four nearest points
+                  JX : constant Natural := IX / Step;
+                  JZ : constant Natural := IZ / Step;
+                  TX : constant Float := Float (IX mod Step) / Float (Step);
+                  TZ : constant Float := Float (IZ mod Step) / Float (Step);
+                  Far_Base : constant Float :=
+                    (Base (JZ * CNX + JX) * (1.0 - TX) + Base (JZ * CNX + JX + 1) * TX) * (1.0 - TZ)
+                    + (Base ((JZ + 1) * CNX + JX) * (1.0 - TX) + Base ((JZ + 1) * CNX + JX + 1) * TX) * TZ;
+                  Blend : constant Float := Clamp ((D0 - 100.0) / 60.0, 0.0, 1.0);
+                  Near_Base : Float := Far_Base;
+                  Sum_W : constant Float := 1.0;
+                  Sum_H : Float;
+               begin
+                  if Blend < 1.0 then
+                     Feel (X, Z, 3.0 * D0 + 80.0, Best, Near_Base);
+                  end if;
+                  Sum_H := Near_Base * (1.0 - Blend) + Far_Base * Blend;
                   declare
                      Dist : constant Float := Sqrt (Best);
                      Road : constant Float := Sum_H / Sum_W;
@@ -782,6 +908,9 @@ package body Track is
                end;
             end loop;
          end loop;
+         Free_I (Head);
+         Free_I (Link);
+         Free_F (Base);
       end;
    end Build_Terrain;
 
