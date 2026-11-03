@@ -484,6 +484,15 @@ package body Session is
             else
                St.Inputs.Throttle := 0.0;
                St.Inputs.Brake := Clamp (-Err * 0.3, 0.0, 1.0);
+               --  Gentle on the brake too while the tyres are busy turning,
+               --  and in a slide: what the corner uses, the brake cannot
+               declare
+                  Used : constant Float := abs C.Ay / (Spec.Mu * 9.81);
+               begin
+                  St.Inputs.Brake := St.Inputs.Brake * Clamp (1.3 - Used * Used, 0.3, 1.0);
+               end;
+               --  the more the tail steps out, the more of the brake comes off
+               St.Inputs.Brake := St.Inputs.Brake * Clamp (1.25 - abs C.Vy * 0.3, 0.15, 1.0);
             end if;
          end;
       end;

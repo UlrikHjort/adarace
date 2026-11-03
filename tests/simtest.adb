@@ -71,6 +71,7 @@ procedure Simtest is
       Min_Y, Max_Y : Float := 0.0;
       Min_Sep : Float := Float'Last;
       Min_Room : Float := Float'Last;
+      Min_Gap : Float := Float'Last;   --  between the barriers of two parts of the road
    begin
       Track.Load (T);
       Min_Y := Track.Samples (0).Y;
@@ -92,9 +93,22 @@ procedure Simtest is
                         Circ : constant Integer := Integer'Min (Sep, Track.Count - Sep);
                      begin
                         if Float (Circ) * Track.Spacing > 150.0 then
-                           Min_Sep := Float'Min
-                             (Min_Sep, Sqrt ((Track.Samples (J).X - S.X) ** 2
-                                             + (Track.Samples (J).Z - S.Z) ** 2));
+                           declare
+                              O : Track.Sample renames Track.Samples (J);
+                              Dist : constant Float := Sqrt ((O.X - S.X) ** 2 + (O.Z - S.Z) ** 2);
+                              --  On the sides that face each other: neither
+                              --  barrier may stand on the other road
+                              Lat_S : constant Float := (O.X - S.X) * S.RX + (O.Z - S.Z) * S.RZ;
+                              Lat_O : constant Float := (S.X - O.X) * O.RX + (S.Z - O.Z) * O.RZ;
+                              Wall_S : constant Float := (if Lat_S > 0.0 then S.Wall_R else S.Wall_L);
+                              Wall_O : constant Float := (if Lat_O > 0.0 then O.Wall_R else O.Wall_L);
+                              Road_S : constant Float := (if Lat_S > 0.0 then S.W_R else S.W_L);
+                              Road_O : constant Float := (if Lat_O > 0.0 then O.W_R else O.W_L);
+                           begin
+                              Min_Sep := Float'Min (Min_Sep, Dist);
+                              Min_Gap := Float'Min
+                                (Min_Gap, Float'Min (Dist - Wall_S - Road_O, Dist - Wall_O - Road_S));
+                           end;
                         end if;
                      end;
                   end if;
@@ -106,7 +120,9 @@ procedure Simtest is
                 & Img (1.0 / Max_K, 1) & " m, climb " & Img (Max_Y - Min_Y, 1)
                 & " m, nearest other road " & Img (Min_Sep, 1)
                 & " m, least run-off " & Img (Min_Room, 1) & " m");
-      Check (Min_Sep > 40.0, "the road does not cross or touch itself");
+      Check (Min_Sep > 20.0 and then Min_Gap > 0.0,
+             "the road does not cross or touch itself: no barrier on another part of it"
+             & (if Min_Gap < 1000.0 then " (" & Img (Min_Gap, 1) & " m to spare)" else ""));
       Check (1.0 / Max_K > 12.0, "no impossibly tight corner");
    end Track_Shape;
 
@@ -481,14 +497,19 @@ procedure Simtest is
       Off_Count, Hits, Falls : Natural := 0;
       Was_Off, Was_Down : Boolean := False;
       Laps_Done : Natural := 0;
+      Laps_Wanted : Natural := 3;
    begin
       S.Mode := Session.Demo;
       S.Opponents := 0;
       S.AI_Skill := 0.98;
       Track.Load (T);
+      if Track.Length > 10_000.0 then
+         Laps_Wanted := 2;
+      end if;
       Session.Start (S);
       Session.Laps (1).Best_Time := 0.0;
-      for I in 1 .. 1_500_000 loop
+      --  (a long road: two laps, and the time they take)
+      for I in 1 .. Natural'Max (1_500_000, Natural (Track.Length * 140.0)) loop
          Session.Step (N);
          declare
             C : Car renames Session.Cars (1);
@@ -521,13 +542,13 @@ procedure Simtest is
             Was_Off := Off;
          end;
          Laps_Done := Session.Laps (1).Lap;
-         exit when Laps_Done >= 3;
+         exit when Laps_Done >= Laps_Wanted;
       end loop;
       Put_Line (Track.Name (T) & " / " & Name (K) & ": last lap " & Img (Session.Laps (1).Last_Time, 3)
                 & " s, top " & Img (Max_V * 3.6, 0) & " km/h, lateral "
                 & Img (Max_Lat / 9.81) & " g, tyres " & Img (Max_Temp, 0)
                 & " C, off" & Off_Count'Image & ", wall ms" & Hits'Image);
-      Check (Laps_Done >= 3, "the AI completes its laps");
+      Check (Laps_Done >= Laps_Wanted, "the AI completes its laps");
       Check (not Saved_By_Demo,
              "laps by the AI are not saved as records");
       Check (Off_Count = 0, "the AI stays on the circuit");
@@ -1609,13 +1630,20 @@ procedure Simtest is
          Put_Line ("    three rivals' speed: before" & Img (Before * 3.6, 0) & ", under the safety car"
                    & Img (During * 3.6, 0) & " km/h");
          Check (During < Before * 0.85, "and everyone slows");
-         --  The player, going on as before: a penalty
-         Session.Force_AI := False;
-         N.Throttle := 1.0;
-         for K in 1 .. 6000 loop
+         --  The player, going on faster than the pace for a few seconds: a penalty
+         for K in 1 .. 4000 loop
             Session.Step (N);
+            declare
+               C : Car renames Session.Cars (1);
+               Want : constant Float :=
+                 Session.VSC_Pace * Track.Samples (C.Hint).Line_V + 8.0;
+            begin
+               if C.Vx < Want then
+                  C.Vx := Want;
+               end if;
+            end;
          end loop;
-         Check (Session.Laps (1).Penalty >= Session.VSC_Penalty or else Speed (Session.Cars (1)) < 20.0,
+         Check (Session.Laps (1).Penalty >= Session.VSC_Penalty,
                 "too fast under it costs five seconds:" & Img (Session.Laps (1).Penalty, 0) & " s");
          N := (others => <>);
          Session.Force_AI := True;
@@ -2021,6 +2049,23 @@ begin
       Ada.Directories.Delete_Tree (Ada.Environment_Variables.Value ("HOME"));
    end if;
    --  ADARACE_ONLY=bike: just the motorcycle, while tuning it
+   --  ADARACE_ONLY=track:N: one road, its shape and the AI round it in everything
+   declare
+      Only : constant String := Ada.Environment_Variables.Value ("ADARACE_ONLY", "");
+   begin
+      if Only'Length > 6 and then Only (Only'First .. Only'First + 5) = "track:" then
+         declare
+            T : constant Track.Track_Id := Track.Track_Id'Value (Only (Only'First + 6 .. Only'Last));
+         begin
+            Track_Shape (T);
+            for K in Car_Kind loop
+               AI_Lap (T, K);
+            end loop;
+            Put_Line (if Failed = 0 then "All passed" else Failed'Image & " FAILED");
+            return;
+         end;
+      end if;
+   end;
    if Ada.Environment_Variables.Value ("ADARACE_ONLY", "") = "endurance" then
       Endurance;
       Put_Line (if Failed = 0 then "All passed" else Failed'Image & " FAILED");

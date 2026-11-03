@@ -109,12 +109,14 @@ Physics run at 1 kHz in an Ada task of their own, independent of the frame rate.
   Sent at 125 Hz.
 
 Five cars: a road GT, a GT3 with slicks and wings, a four wheel drive rally car, a light
-classic and a mid-engined hypercar, and a motorcycle (see below). Seven circuits: Søndersø Ring (4.9 km), Monte Ferro
+classic and a mid-engined hypercar, and a motorcycle (see below). Eight circuits: Søndersø Ring (4.9 km), Monte Ferro
 (3.2 km, 64 m of climb), Kalvø Speedway (3.2 km, banked oval), the Havnebyen street circuit
 (2.8 km, between walls along a harbour), the Boulevard Royal street circuit on real
 city streets (3.8 km), Fjordringen (3.7 km, a long straight by a fjord and a climb to a
 plateau) and Storø TT (7 km of narrow island road, 155 m up to the moor and down the
-switchbacks, made for the motorcycle). There are also three rally stages.
+switchbacks, made for the motorcycle) and the Hexenwald Ring: 20.7 km through the forest
+and 290 m up and down, the real lap of a famous old German circuit made from OpenStreetMap
+and SRTM heights, under a name of its own. There are also three rally stages.
 
 Hot laps against the ghost of your best lap, which is kept per car and circuit
 in `~/.local/share/adarace`, or races against up to seven AI cars on the same
@@ -331,9 +333,15 @@ and brings the real buildings beside the route (as `block` lines, at their size 
 and the river (as `water`). `tracks/08-boulevard.track`, Boulevard Royal, was made so from a
 real city centre: a long boulevard, a turn down an avenue to the river and back along the quay.
 
+Real circuits: `scripts/osm_raceway.py` makes a circuit from a real race track in OpenStreetMap.
+It chains the track's one-way raceway pieces into the lap, takes the width from the map and
+the heights from SRTM (through the Open Topo Data service), and smooths them. Circuit names
+are trademarks, so give it one of your own, as the Hexenwald Ring has. `setting forest` grows
+woods along a circuit.
+
 The points are in metres and join into a closed loop, so a stage has a road home after its
 finish. Banking is in degrees, positive when the right side is lower. Keep parts of the road
-40 m apart and corners over about 12 m radius. A bad file is left out with a message naming
+far enough apart that their barriers do not meet (about 30 m) and corners over about 12 m radius. A bad file is left out with a message naming
 the line, and `make test` drives the AI round everything in the folder.
 
 ## Driving school and coach
@@ -363,6 +371,9 @@ Work happens on a branch per feature or fix. See [CONTRIBUTING.md](CONTRIBUTING.
 
 ## Licence
 
-MIT: see [LICENSE](LICENSE). The Boulevard Royal road file, `tracks/08-boulevard.track`, is
-made from OpenStreetMap data: map data © OpenStreetMap contributors, available under the
-[Open Database Licence](https://www.openstreetmap.org/copyright).
+MIT: see [LICENSE](LICENSE). The Boulevard Royal and Hexenwald Ring road files,
+`tracks/08-boulevard.track` and `tracks/11-hexenwald.track`, are made from OpenStreetMap
+data: map data © OpenStreetMap contributors, available under the
+[Open Database Licence](https://www.openstreetmap.org/copyright), so those two files are
+under the ODbL too. The Hexenwald Ring's heights come from SRTM (NASA), in the public domain.
+The circuit names in the game are made up and are not those of any real circuit.

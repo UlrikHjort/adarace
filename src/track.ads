@@ -60,6 +60,7 @@ package Track is
    function Loaded return Track_Id;
 
    function Is_City return Boolean;
+   function Is_Forest return Boolean;   --  a circuit through woods (setting forest)
    --  A street circuit: walls at the kerb, buildings behind them, maybe water
 
    --  Water (a harbour basin, a river), as round pieces, if the road has any

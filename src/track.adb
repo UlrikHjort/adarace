@@ -34,6 +34,7 @@ package body Track is
       Name : Unbounded_String;
       Stage : Boolean := False;
       City : Boolean := False;
+      Forest : Boolean := False;   --  a circuit through woods
       Waters : Pool_Array;
       Water_Count : Natural := 0;
       Blocks : Building_Access;              --  real buildings, from a map
@@ -52,7 +53,7 @@ package body Track is
       use Ada.Text_IO;
       F : File_Type;
       Line_No : Natural := 0;
-      Buffer : array (1 .. 800) of Point;
+      Buffer : array (1 .. 4000) of Point;   --  a 20 km road at 12 m: 1700
       Block_Buffer : Building_Array (1 .. 3000);
       Block_Used : Natural := 0;
       Used : Natural := 0;
@@ -164,8 +165,10 @@ package body Track is
                   elsif Key = "setting" then
                      if Rest = "city" then
                         R.City := True;
+                     elsif Rest = "forest" then
+                        R.Forest := True;
                      elsif Rest /= "country" then
-                        Fail ("setting is country or city");
+                        Fail ("setting is country, forest or city");
                      end if;
                   elsif Key = "water" then
                      declare
@@ -312,6 +315,7 @@ package body Track is
    function Is_Stage return Boolean is (Roads (Current).Stage);
 
    function Is_City return Boolean is (Roads (Current).City);
+   function Is_Forest return Boolean is (Roads (Current).Forest);
 
    function Water_X return Float is (Pools (1).X);
    function Water_Z return Float is (Pools (1).Z);
@@ -1052,6 +1056,12 @@ package body Track is
    is
       subtype R is Natural range 0 .. Count - 1;
       V : Float_List (R);
+      --  Over a crest the car goes light, in a dip it is pressed down: the
+      --  road's bend in the vertical, per metre, over 20 m either side
+      Reach : constant Positive := Positive'Max (1, Integer (20.0 / Spacing));
+      function Dip (I : Natural) return Float is
+        ((Samples (Next (I, Reach)).Y - 2.0 * Samples (I).Y + Samples (Next (I, -Reach)).Y)
+         / (Float (Reach) * Spacing) ** 2);
    begin
       for I in R loop
          declare
@@ -1060,7 +1070,7 @@ package body Track is
             --  Banking helps: a share of gravity turns the car
             Bank_Help : constant Float :=
               (if S.Line_K > 0.0 then -S.Bank else S.Bank) * 9.81;
-            Den : constant Float := K - Mu * Down_Per_V2;
+            Den : constant Float := K - Mu * Down_Per_V2 - Mu * Dip (I);
          begin
             V (I) := (if Den <= 0.00005 then 120.0
                       else Float'Min (120.0, Sqrt (Float'Max (2.0, Mu * 9.81 + Bank_Help) / Den)));
@@ -1089,10 +1099,12 @@ package body Track is
                VN : constant Float := V (N);
                K : constant Float := abs Samples (N).Line_K;
                Lat : constant Float := VN * VN * K;
-               Grip : constant Float := Mu * (9.81 + Down_Per_V2 * VN * VN);
+               Grip : constant Float :=
+                 Mu * Float'Max (2.0, 9.81 + (Down_Per_V2 + Dip (N)) * VN * VN);
                Left : constant Float := Sqrt (Float'Max (0.2, Grip * Grip - Lat * Lat));
                Grade : constant Float := (Samples (N).Y - Samples (I).Y) / Spacing * 9.81;
-               A : constant Float := Float'Min (Left, Brake_Acc) + Drag_Per_V2 * VN * VN + Grade;
+               A : constant Float := Float'Min (Left, Brake_Acc * Grip / (Mu * 9.81))
+                 + Drag_Per_V2 * VN * VN + Grade;
             begin
                V (I) := Float'Min (V (I), Sqrt (VN * VN + 2.0 * Float'Max (A, 1.0) * Spacing));
             end;
@@ -1128,7 +1140,11 @@ package body Track is
       type Bool_Access is access Bool_Grid;
       procedure Free_B is new Ada.Unchecked_Deallocation (Bool_Grid, Bool_Access);
       Taken : Bool_Access := new Bool_Grid (0 .. NX * NZ - 1);
-      Max_Trees : constant Natural := (if Stage then 16_000 else 7000);
+      --  (more on a long road, or the wood thins out over it)
+      Woods : constant Boolean := Stage or else Is_Forest;
+      Max_Trees : constant Natural :=
+        Natural'Min (40_000, Natural (Float (if Woods then 16_000 else 7000)
+                                      * Float'Max (1.0, Length / 5000.0)));
       Found : constant Tree_Access := new Tree_Array (1 .. Max_Trees);
       Placed : Natural := 0;
 
@@ -1210,7 +1226,7 @@ package body Track is
          end loop;
       end if;
 
-      for Try in 1 .. (if Stage then 150_000 else 50_000) loop
+      for Try in 1 .. Natural (Float (if Woods then 150_000 else 50_000) * Float'Max (1.0, Length / 5000.0)) loop
          declare
             X : constant Float := Grid_X0 + Random (Gen) * Float (NX - 1) * Cell;
             Z : constant Float := Grid_Z0 + Random (Gen) * Float (NZ - 1) * Cell;
@@ -1219,7 +1235,7 @@ package body Track is
             Wood : constant Float := Fbm (X / 180.0, Z / 180.0, 3);
          begin
             if IZ * NX + IX <= Taken'Last and then not Taken (IZ * NX + IX)
-              and then Wood > (if Stage then 0.26 elsif Is_City then 0.62 else 0.46)
+              and then Wood > (if Woods then 0.26 elsif Is_City then 0.62 else 0.46)
               and then Placed < Max_Trees and then Dry (X, Z)
             then
                declare
