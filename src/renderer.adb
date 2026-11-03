@@ -356,6 +356,37 @@ package body Renderer is
       * Rotation_X (P.Pitch) * Rotation_Z (P.Roll)
       * Translation ((0.0, -Session.Spec.H_Cg, 0.0)));
 
+   --  Where a motorcycle's rider is: hanging off into the corner and tucked
+   --  in at speed; after a fall, sliding along the road behind the bike
+   function Rider_Matrix (P : Sim_Loop.Car_Pose; M : Mat4) return Mat4 is
+      Seat : constant Vec3 := Car_Model.Seat;
+   begin
+      if P.Fallen > 0.0 then
+         declare
+            Fwd : constant Vec3 := (Sin (P.Heading), 0.0, -Cos (P.Heading));
+            Right : constant Vec3 := (Cos (P.Heading), 0.0, Sin (P.Heading));
+            Ground : constant Float := P.Y - Session.Spec.H_Cg * Cos (P.Roll);
+            Away : constant Float := Float'Min (1.0, P.Fallen * 1.5);
+            Spin : constant Float := 2.2 * (1.0 - Exp (-1.6 * P.Fallen));
+            At_W : constant Vec3 :=
+              (P.X, Ground + 0.17, P.Z) - P.Rider_Gap * Fwd
+              - (Float'Copy_Sign (0.7, P.Roll) * Away) * Right;
+         begin
+            return Translation (At_W) * Rotation_Y (-P.Heading + Spin)
+              * Rotation_X (-1.45 * Away) * Translation ((-Seat.X, -Seat.Y, -Seat.Z));
+         end;
+      end if;
+      declare
+         Hang : constant Float := Float'Max (-1.0, Float'Min (1.0, P.Roll / 0.6));
+         Tuck : constant Float := Float'Max (0.0, Float'Min (1.0, (P.Speed - 25.0) / 25.0));
+      begin
+         return M * Translation (Seat)
+           * Translation ((-0.20 * Hang, -0.05 * Tuck, -0.05 * Tuck))
+           * Rotation_Z (0.35 * Hang) * Rotation_X (-0.12 * Tuck)
+           * Translation ((-Seat.X, -Seat.Y, -Seat.Z));
+      end;
+   end Rider_Matrix;
+
    function Transform (M : Mat4; V : Vec3) return Vec3 is
      ((M (0) * V.X + M (4) * V.Y + M (8) * V.Z + M (12),
        M (1) * V.X + M (5) * V.Y + M (9) * V.Z + M (13),
@@ -428,6 +459,17 @@ package body Renderer is
          when Night =>
            (Normalize ((0.35, 0.65, 0.40)), (0.085, 0.10, 0.15), (0.006, 0.009, 0.020), (0.012, 0.016, 0.030),
             0.00015, 0.35, 1.6, 0.0));
+
+   --  The light on its way from one hour to the next
+   function Blend (A, B : Sky_Look; T : Float) return Sky_Look is
+      function Mix (X, Y : Float) return Float is (X + (Y - X) * T);
+      function Mix (X, Y : Vec3) return Vec3 is ((Mix (X.X, Y.X), Mix (X.Y, Y.Y), Mix (X.Z, Y.Z)));
+   begin
+      return (Sun_Dir => Normalize (Mix (A.Sun_Dir, B.Sun_Dir)), Sun_C => Mix (A.Sun_C, B.Sun_C),
+              Sky_C => Mix (A.Sky_C, B.Sky_C), Hor => Mix (A.Hor, B.Hor), Fog => Mix (A.Fog, B.Fog),
+              Clouds => Mix (A.Clouds, B.Clouds), Exposure => Mix (A.Exposure, B.Exposure),
+              Mist => Mix (A.Mist, B.Mist));
+   end Blend;
 
    --  The weather over it; darkness stays darkness
    function Look_For (D : Time_Of_Day) return Sky_Look is
@@ -506,6 +548,11 @@ package body Renderer is
          glEnable (GL_CULL_FACE);
          glCullFace (GL_BACK);
          Mesh.Draw (Car_Model.Meshes (Kind).Bodywork);
+         if Vehicle.Is_Bike (Kind) then
+            Shaders.Set (U_Model, Rider_Matrix (P, M));
+            Mesh.Draw (Car_Model.Meshes (Kind).Rider);
+            Shaders.Set (U_Model, M);
+         end if;
          glDisable (GL_CULL_FACE);
       end if;
       Draw_Wheels (P, M, Kind, U_Model);
@@ -869,6 +916,11 @@ package body Renderer is
             glCullFace (GL_BACK);
             Shaders.Set (U_Grain, Float'(-1.0));
             Mesh.Draw (Car_Model.Meshes (Kind).Bodywork);
+            if Vehicle.Is_Bike (Kind) then
+               Shaders.Set (U_Model, Rider_Matrix (Poses (Focus_Car), M));
+               Mesh.Draw (Car_Model.Meshes (Kind).Rider);
+               Shaders.Set (U_Model, M);
+            end if;
             Shaders.Set (U_Grain, Float'(0.0));
             glDisable (GL_CULL_FACE);
             Mesh.Draw (Car_Model.Meshes (Kind).Cockpit);
@@ -932,6 +984,11 @@ package body Renderer is
          begin
             Shaders.Set (S_Model, M);
             Mesh.Draw (Car_Model.Meshes (Kind).Bodywork);
+            if Vehicle.Is_Bike (Kind) then
+               Shaders.Set (S_Model, Rider_Matrix (Poses (I), M));
+               Mesh.Draw (Car_Model.Meshes (Kind).Rider);
+               Shaders.Set (S_Model, M);
+            end if;
             Draw_Wheels (Poses (I), M, Kind, S_Model);
          end;
       end loop;
@@ -963,9 +1020,11 @@ package body Renderer is
         (if Span > 0.0 then Clamp (Float ((Now_T - A.Time) / Span), 0.0, 8.0) else 1.0);
       Poses : Sim_Loop.Pose_Array := B.Poses;
       Dt : constant Float := Options.Dt;
-      Sky : constant Sky_Look := Look_For (Options.Day);
+      Sky : constant Sky_Look :=
+        (if Options.Fade > 0.0 then Blend (Look_For (Options.Day), Look_For (Options.Day_Next), Options.Fade)
+         else Look_For (Options.Day));
       Dim : constant Boolean :=
-        Options.Day in Dawn | Dusk | Night
+        (if Options.Fade > 0.5 then Options.Day_Next else Options.Day) in Dawn | Dusk | Night
         or else Session.Config.Weather in Session.Rain | Session.Fog | Session.Snowing;
       Fov : constant Float := Options.Fov * Pi / 180.0;
       Aspect : constant Float := Float (Width) / Float (Natural'Max (Height, 1));
@@ -1011,7 +1070,10 @@ package body Renderer is
          Fwd_W : constant Vec3 := (Sin (P.Heading), 0.0, -Cos (P.Heading));
          K_Dt : constant Float := Clamp (Dt * 7.0, 0.0, 1.0);
       begin
-         case Options.Camera is
+         --  A motorcycle down: out of the helmet, to watch it slide
+         case (if P.Fallen > 0.0 and then Options.Camera in Cockpit | Hood
+                 and then Vehicle.Is_Bike (Session.Config.Kind)
+               then Chase_Far else Options.Camera) is
             when Cockpit | Hood =>
                In_Cockpit := Options.Camera = Cockpit;
                Own_Hidden := True;
@@ -1030,7 +1092,8 @@ package body Renderer is
                     (Sin (Options.Look), -0.055, -Cos (Options.Look));
                   World_Dir : constant Vec3 := Direction (M, Look_Dir);
                begin
-                  Eye := Transform (M, Base);
+                  Eye := Transform ((if Vehicle.Is_Bike (Session.Config.Kind)
+                                     then Rider_Matrix (P, M) else M), Base);
                   Tgt := Eye + 10.0 * World_Dir;
                   --  Half of the roll and pitch of the car reach the horizon
                   Up := Normalize (Vec3'(0.0, 1.0, 0.0) + Direction (M, (0.0, 1.0, 0.0)));

@@ -1131,6 +1131,10 @@ package body Track is
       Max_Trees : constant Natural := (if Stage then 16_000 else 7000);
       Found : constant Tree_Access := new Tree_Array (1 .. Max_Trees);
       Placed : Natural := 0;
+
+      --  No trees standing in the water
+      function Dry (X, Z : Float) return Boolean is
+        (not Has_Water or else Terrain_Height (X, Z) > Water_Y + 0.5);
    begin
       Reset (Gen, 4711);
       Taken.all := (others => False);
@@ -1183,7 +1187,7 @@ package body Track is
                      IZ : constant Integer := Integer (Float'Floor ((Z - Grid_Z0) / Cell));
                      Roll : constant Float := Random (Gen);
                   begin
-                     if not Glade and then Roll < 0.55
+                     if not Glade and then Roll < 0.55 and then Dry (X, Z)
                        and then IX in 0 .. NX - 1 and then IZ in 0 .. NZ - 1
                        and then not Taken (IZ * NX + IX) and then Placed < Max_Trees
                      then
@@ -1216,7 +1220,7 @@ package body Track is
          begin
             if IZ * NX + IX <= Taken'Last and then not Taken (IZ * NX + IX)
               and then Wood > (if Stage then 0.26 elsif Is_City then 0.62 else 0.46)
-              and then Placed < Max_Trees
+              and then Placed < Max_Trees and then Dry (X, Z)
             then
                declare
                   H : constant Float := 7.0 + Random (Gen) * 11.0;

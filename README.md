@@ -109,14 +109,38 @@ Physics run at 1 kHz in an Ada task of their own, independent of the frame rate.
   Sent at 125 Hz.
 
 Five cars: a road GT, a GT3 with slicks and wings, a four wheel drive rally car, a light
-classic and a mid-engined hypercar, and a motorcycle (see below). Five circuits: Søndersø Ring (4.9 km), Monte Ferro
+classic and a mid-engined hypercar, and a motorcycle (see below). Seven circuits: Søndersø Ring (4.9 km), Monte Ferro
 (3.2 km, 64 m of climb), Kalvø Speedway (3.2 km, banked oval), the Havnebyen street circuit
-(2.8 km, between walls along a harbour) and the Boulevard Royal street circuit on real
-city streets (3.8 km), and three rally stages.
+(2.8 km, between walls along a harbour), the Boulevard Royal street circuit on real
+city streets (3.8 km), Fjordringen (3.7 km, a long straight by a fjord and a climb to a
+plateau) and Storø TT (7 km of narrow island road, 155 m up to the moor and down the
+switchbacks, made for the motorcycle). There are also three rally stages.
 
 Hot laps against the ghost of your best lap, which is kept per car and circuit
 in `~/.local/share/adarace`, or races against up to seven AI cars on the same
 physics. A lap with all four wheels off the track does not count.
+
+**Career:** a ladder of six short championships, three races of five laps each. Each series
+has its own vehicle and circuits:
+
+| | Series | Vehicle | Circuits |
+|---|---|---|---|
+| 1 | Classic Cup | Nordic 1600 | Søndersø Ring, Monte Ferro, Havnebyen |
+| 2 | Road GT Series | Nordic GT 420 | Fjordringen, Boulevard Royal, Kalvø Speedway |
+| 3 | Superbike Trophy | Nordic 1000 R | Søndersø Ring, Fjordringen, Havnebyen |
+| 4 | GT3 Championship | Nordic GT3 | Monte Ferro, Boulevard Royal, Søndersø Ring |
+| 5 | Island TT Masters | Nordic 1000 R | Storø TT, Monte Ferro, Fjordringen |
+| 6 | Hypercar Finale | Nordic Hyper | Kalvø Speedway, Fjordringen, Boulevard Royal |
+
+Finish a series in the top three to open the next one. The rivals get a little quicker on
+the way up. Your progress is kept in `~/.local/share/adarace/career`.
+
+**Endurance:** choose *45 min endurance* as the race length. It is a race against the clock,
+from the golden hour through dusk into the night, on the headlamps by the end. When the time
+is up, the leader takes the flag at the line and everyone finishes their lap. Fuel and tyre
+wear always count, and every car starts with fuel for about half the race. So everyone stops
+at least once: you in the pit box past the line, and the AI cars too, which take the pit lane
+under its 60 km/h limit, stop at their boxes and rejoin. The HUD shows the time left.
 
 The cars have their own shapes: the GT3 low with flared arches, the R4 a tall hatchback.
 From the cockpit, live gauges replace the speed panel. Bodywork crumples and scratches with
@@ -140,8 +164,13 @@ It turns from that lean, not from the bars.
 - **Controls:** the front brake is the brake pedal, and the rear brake is the handbrake
   (X on a controller, Space on the keyboard). On a controller, the stick asks for a share
   of the lean the tyres allow, so full stick is the most the bike can lean at any speed.
+- **The rider** hangs off the inside of the bike in corners and tucks in behind the screen
+  at speed. In a crash, rider and bike slide apart down the road, the bike further on its
+  metal than he does in his leathers.
+- **Tyres** warm with the work they do and cool in the air. Around 80 °C they grip best, and
+  cold or overheated they give up a little grip, as on the cars.
 - **Views:** in the cockpit camera you look out of the helmet, over the clocks, and the
-  horizon tilts with the lean.
+  horizon tilts with the lean. After a fall the camera pulls back to watch the slide.
 
 The AI rides it too, round every circuit and stage.
 
@@ -160,6 +189,7 @@ The AI rides it too, round every circuit and stage.
 | | | H | panels |
 | | | L | driving line |
 | | | B | co-driver's voice |
+| D-pad down | D-pad down | M | mark a moment that felt wrong (see [Telemetry](#telemetry-and-tuning)) |
 | Square | Click the left stick | R | back on the track (the lap is lost; +15 s on a stage) |
 | + / - or dial | | + / - | force feedback strength |
 | R3 (press again for the front) | Click the right stick | W (hold) | look back |
@@ -197,6 +227,11 @@ Every drive is logged at 100 Hz and written as CSV when it ends, to
 `~/.local/share/adarace/telemetry/` (the newest 20 files are kept). It holds
 inputs, speed, slip, tyre loads and temperatures, steering torque and the force
 sent to the wheel.
+
+**Something felt wrong?** Press **M**, or down on the d-pad, at that moment. The game says
+"Mark 1 noted", and that moment is numbered in the file's `mark` column. Describe each mark
+in an issue ("mark 2: the bike fell for no reason in the hairpin") and attach the file.
+Then the exact speeds, inputs and grip at that moment are there to look at.
 
 `bin/catch` (built by `make test`) measures how forgiving slides are: a simulated
 driver with a 0.2 s reaction time overcooks a corner and countersteers. Handling
@@ -287,7 +322,8 @@ or stage needs no code. `tracks/04-skovvej.track` is a good one to start from:
     ...
 
 A street circuit adds `setting city`: walls at the kerb with a catch fence, street lamps, a
-town of buildings and square corners. `water x z radius` digs a harbour basin there.
+town of buildings and square corners. `water x z radius`, on any road, digs out water there
+(a harbour basin, a fjord, the sea). Settings come before `points`.
 
 Real streets: `scripts/osm_road.py` makes a street circuit from OpenStreetMap data. Give it the
 map and a few points to pass through, and it routes along drivable roads, rounds the corners,

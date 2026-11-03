@@ -20,6 +20,8 @@ package Renderer is
       Orbit    : Float := 0.0;      --  radians round the car, the chase camera (videos)
       Mirror   : Boolean := True;
       Day      : Time_Of_Day := Noon;
+      Day_Next : Time_Of_Day := Noon;   --  the light turning towards this
+      Fade     : Float := 0.0;          --  0 .. 1 of the way there
       Ghost    : Boolean := True;
       Guide    : Boolean := False;  --  the driving line on the road
       Cabin    : Boolean := False;

@@ -23,6 +23,7 @@ package Sim_Loop is
       Speed : Float := 0.0;
       Rpm   : Float := 0.0;
       Gear  : Integer := 0;
+      Fallen, Rider_Gap : Float := 0.0;   --  a motorcycle down, its rider behind it
    end record;
 
    type Pose_Array is array (Session.Car_Index) of Car_Pose;

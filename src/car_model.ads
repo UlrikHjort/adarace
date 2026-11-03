@@ -16,6 +16,7 @@ package Car_Model is
       Wheel    : Mesh.GPU;   --  a wheel on its axle, along X
       Cockpit  : Mesh.GPU;   --  dash, pillars, roof, door tops
       Steering : Mesh.GPU;   --  round its own column, centred at the origin
+      Rider    : Mesh.GPU;   --  on a motorcycle; nothing in a car
    end record;
 
    Meshes : array (Vehicle.Car_Kind) of Car_Meshes;
@@ -37,6 +38,7 @@ package Car_Model is
    Bike_Eye_Z : constant := -0.30;
    Bars_Y : constant := 0.96;
    Bars_Z : constant := -0.50;
+   Seat : constant Math3D.Vec3 := (0.0, 0.86, 0.12);   --  the rider moves about it
 
    function Eye (K : Vehicle.Car_Kind) return Math3D.Vec3 is
      (if Vehicle.Is_Bike (K) then (0.0, Bike_Eye_Y, Bike_Eye_Z) else (Eye_X, Eye_Y, Eye_Z));

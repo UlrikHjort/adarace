@@ -25,6 +25,7 @@ package Session is
       Assist   : Vehicle.Assists;
       Opponents : Natural range 0 .. Max_Cars - 1 := 5;
       Laps     : Positive := 5;
+      Minutes  : Natural := 0;   --  a race against the clock (endurance), not laps; 0: laps
       AI_Skill : Float := 0.95;
       Tune     : Vehicle.Setup;
       Weather  : Weather_Kind := Clear;
@@ -112,6 +113,12 @@ package Session is
 
    procedure Reset_Player;
 
+   function Time_Left return Float;
+   --  An endurance race: seconds until the flag (0 when it is out, or no clock)
+
+   function Pit_Stops (I : Car_Index) return Natural;
+   --  Stops made in this race
+
    procedure Seed_Dice (Seed : Integer);
    --  The AI's chances the same every time (for the tests)
    --  Back onto the racing line, stopped (costs the lap; on a stage, time)
@@ -128,6 +135,7 @@ package Session is
    end record;
    Remote : Remote_View;
    Stunt_Riders : Boolean := False;   --  motorcycles ridden for show (videos)
+   Fall_At : Float := 0.0;   --  (pictures) the AI rider of car 1 falls this far into the lap, s
    Online_Ready : Boolean := False;   --  both there: the lights may start
 
    Second_Hands : Vehicle.Inputs;

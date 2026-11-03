@@ -172,6 +172,7 @@ package Vehicle is
       Hit_X, Hit_Y : Float := 0.0;  --  where on the body it was hit last
       Seen_Impact : Float := 0.0;
       Fallen_T : Float := 0.0;   --  a motorcycle down: seconds on the ground
+      Rider_Vx, Rider_Gap : Float := 0.0;   --  and its rider, sliding behind it
    end record;
 
    procedure Place (C : in out Car; K : Car_Kind; X, Z, Heading : Float);

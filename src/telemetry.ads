@@ -20,4 +20,8 @@ package Telemetry is
    function Last_File return String;
    --  The file written last ("" if none)
 
+   function Mark return Positive;
+   --  "This felt wrong": the next sample carries the mark's number (1, 2..
+   --  in each drive), in the CSV's mark column.  From the window's thread.
+
 end Telemetry;

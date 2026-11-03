@@ -275,7 +275,7 @@ package body Sim_Loop is
          declare
             Lean : constant Float := Stick * Vehicle.Lean_Limit (S);
             Kappa : constant Float := 9.81 * Tan (Lean) / Float'Max (6.0, V) ** 2;
-            At_Speed : constant Float := Arctan (Kappa * L) / (S.Steer_Lock * 0.5);
+            At_Speed : constant Float := Arctan (Kappa * L) / S.Steer_Lock;
             W : constant Float := Clamp ((V - 3.0) / 5.0, 0.0, 1.0);
          begin
             return W * At_Speed + (1.0 - W) * Stick;
@@ -434,6 +434,8 @@ package body Sim_Loop is
             P.Speed := Vehicle.Speed (C);
             P.Rpm := C.Rpm;
             P.Gear := C.Gear;
+            P.Fallen := C.Fallen_T;
+            P.Rider_Gap := C.Rider_Gap;
             for W in Vehicle.Wheel_Id loop
                P.Wheel_Y (W) := C.Wheels (W).Off_Y;
                P.Wheel_Angle (W) := C.Wheels (W).Angle;

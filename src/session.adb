@@ -27,6 +27,12 @@ package body Session is
       Stuck_T   : Float := 0.0;
       Inputs    : Vehicle.Inputs;
       Throttle_I : Float := 0.0;
+      --  An endurance race: in for fuel
+      Pit_Want  : Boolean := False;
+      Pit_Side  : Float := 0.0;    --  0 on the line .. 1 in the pit lane
+      Service_T : Float := 0.0;    --  seconds still standing in the box
+      Served    : Boolean := False;
+      Stops     : Natural := 0;
    end record;
 
    AI : array (Car_Index) of AI_State;
@@ -63,6 +69,34 @@ package body Session is
    Stopped_T : array (Car_Index) of Float := (others => 0.0);
    Too_Fast_T : Float := 0.0;
 
+   --  In the pit lane or its box: standing there is no incident
+   function In_Pits (K : Car_Index) return Boolean is
+      Idx : Natural;
+      T, D : Float;
+      Hint : Natural := Cars (K).Hint;
+   begin
+      Track.Locate (Float (Cars (K).X), Float (Cars (K).Z), Hint, Idx, T, D);
+      return Track.In_Pit_Lane (Idx, D) or else Track.In_Pit_Box (Idx, D);
+   end In_Pits;
+
+   --  An endurance race: how long a lap takes on the AI's line, and so how
+   --  many laps are left in the time, and the fuel for them
+   Lap_Est : Float := 90.0;
+   Flag_Out : Boolean := False;
+
+   function Time_Left return Float is
+     (if Config.Minutes = 0 or else Flag_Out then 0.0
+      else Float'Max (0.0, Float (Config.Minutes) * 60.0 - Time));
+
+   function Laps_To_Go (I : Car_Index) return Natural is
+     (if Config.Minutes = 0 then Natural'Max (0, Config.Laps - Laps (I).Lap)
+      else Natural (Float'Ceiling (Time_Left / Lap_Est)) + 1);
+
+   --  Enough for that many laps, and a little over; what the tank takes
+   function Fuel_For_Laps (N : Natural) return Float is
+     (Float'Min (Vehicle.Tank,
+                 2.0 + Float (N) * 1.08 * Track.Length / 1000.0 * Vehicle.Fuel_Per_Km (Config.Kind)));
+
    --  Every twentieth of a second: has someone stopped on the circuit?
    procedure Watch_Race is
    begin
@@ -73,7 +107,9 @@ package body Session is
          declare
             L : Lap_Info renames Laps (K);
          begin
-            if not L.On_Grid and then not L.Finished and then Speed (Cars (K)) < 3.0 then
+            if not L.On_Grid and then not L.Finished and then Speed (Cars (K)) < 3.0
+              and then not In_Pits (K)
+            then
                Stopped_T (K) := Stopped_T (K) + 0.05;
                if Stopped_T (K) > 1.5 then
                   Yellow_S := Track.Samples (Cars (K).Hint).S;
@@ -217,8 +253,63 @@ package body Session is
       Idx : Natural;
       T, D : Float;
       Sp : constant Float := Speed (C);
+      Here_S : Float;
+      Box_S : constant Float :=
+        Float'Min (Track.Pit_To - 3.0, Track.Pit_From + 4.0 + 6.0 * Float ((I - 1) mod 8));
+      In_Zone : Boolean;
    begin
       Track.Locate (Float (C.X), Float (C.Z), C.Hint, Idx, T, D);
+      Here_S := Track.Samples (Idx).S;
+      In_Zone := Here_S >= Track.Length - Track.Pit_Lane_In or else Here_S <= Track.Pit_Lane_Out;
+
+      --  An endurance race: low on fuel, in at the end of the lap.  Over into
+      --  the pit lane, held to its limit, a stop at the box, and back out
+      if Config.Minutes > 0 and then Config.Mode = Race and then Lights_Out then
+         if not St.Pit_Want and then Time_Left > Lap_Est * 0.6
+           and then C.Fuel < 1.0 + 1.6 * Track.Length / 1000.0 * Fuel_Per_Km (Config.Kind)
+           and then Here_S > Track.Length - Track.Pit_Lane_In - 400.0
+           and then Here_S < Track.Length - Track.Pit_Lane_In - 30.0
+         then
+            St.Pit_Want := True;
+            St.Served := False;
+         end if;
+         if St.Pit_Want then
+            if In_Zone and then not (St.Served and then Here_S > Track.Pit_Lane_Out - 50.0
+                                     and then Here_S < Track.Length / 2.0)
+            then
+               St.Pit_Side := Float'Min (1.0, St.Pit_Side + 0.01 * 0.7);
+            else
+               St.Pit_Side := Float'Max (0.0, St.Pit_Side - 0.01 * 0.7);
+               if St.Served and then St.Pit_Side = 0.0 then
+                  St.Pit_Want := False;
+               end if;
+            end if;
+         end if;
+         --  Standing in the box while the crew works
+         if St.Service_T > 0.0 then
+            St.Service_T := St.Service_T - 0.01;
+            St.Inputs.Throttle := 0.0;
+            St.Inputs.Brake := 1.0;
+            St.Inputs.Steer := 0.0;
+            if St.Service_T <= 0.0 then
+               St.Service_T := 0.0;
+               C.Fuel := Float'Max (C.Fuel, Fuel_For_Laps (Laps_To_Go (I)));
+               for W in Wheel_Id loop
+                  C.Wheels (W).Wear := 0.0;
+               end loop;
+               St.Served := True;
+               St.Stops := St.Stops + 1;
+            end if;
+            return;
+         end if;
+         if St.Pit_Want and then not St.Served and then St.Pit_Side > 0.9
+           and then Here_S < Track.Pit_Lane_Out and then abs (Here_S - Box_S) < 2.5 and then Sp < 0.6
+         then
+            St.Service_T := 4.0 + 0.35 * Float'Max
+              (0.0, Fuel_For_Laps (Laps_To_Go (I)) - C.Fuel);
+            return;
+         end if;
+      end if;
 
       --  Make room for a car just ahead, or alongside
       declare
@@ -284,12 +375,16 @@ package body Session is
       end;
 
       declare
-         Look : constant Float := 5.0 + 0.32 * Float'Max (0.0, V);
+         --  (a motorcycle must roll into its lean first: it looks further)
+         Look : constant Float := 5.0 + (if Vehicle.Is_Bike (C.Kind) then 0.45 else 0.32)
+           * Float'Max (0.0, V);
          Steps : constant Integer := Integer (Look / Track.Spacing);
          J : constant Natural := Track.Next (Idx, Steps);
          A : Track.Sample renames Track.Samples (J);
+         Lane : constant Float := -(A.W_L + A.Kerb_L + Track.Pit_Wide * 0.5);
          Off : constant Float :=
-           Clamp (A.Line_D + St.Offset, -(A.W_L - 1.1), A.W_R - 1.1);
+           (1.0 - St.Pit_Side) * Clamp (A.Line_D + St.Offset, -(A.W_L - 1.1), A.W_R - 1.1)
+           + St.Pit_Side * Lane;
          TX : constant Float := A.X + A.RX * Off - Float (C.X);
          TZ : constant Float := A.Z + A.RZ * Off - Float (C.Z);
          FX : constant Float := Sin (C.Heading);
@@ -354,7 +449,21 @@ package body Session is
                   then 0.8
                   else 1.0),
                Slow_Ahead);
-            Err : constant Float := Target - Sp;
+            --  In for fuel: down to the pit lane's limit, stopping at the box
+            To_Box : constant Float :=
+              (if Here_S <= Box_S then Box_S - Here_S
+               elsif Here_S > Track.Length / 2.0 then Box_S + Track.Length - Here_S
+               else -1.0);
+            Pit_Cap : constant Float :=
+              (if not St.Pit_Want then Float'Last
+               elsif St.Served then
+                 (if In_Zone then Track.Pit_Limit * 0.95 else Float'Last)
+               elsif To_Box >= 0.0 and then To_Box < 400.0 then
+                 Float'Min (Float'Min (Track.Pit_Limit * 0.95 + Float'Max (0.0, To_Box - Track.Pit_Lane_In) * 0.25,
+                                       Float'Last),
+                            Sqrt (2.0 * 4.0 * Float'Max (0.0, To_Box - 0.5)))
+               else Float'Last);
+            Err : constant Float := Float'Min (Target, Pit_Cap) - Sp;
          begin
             if not Lights_Out then
                St.Inputs.Throttle := 0.25;
@@ -403,7 +512,7 @@ package body Session is
       end;
 
       --  Lost on the grass or against a wall: back on the track
-      if Lights_Out and then Sp < 1.0 then
+      if Lights_Out and then Sp < 1.0 and then not St.Pit_Want then
          St.Stuck_T := St.Stuck_T + 0.01;
          if St.Stuck_T > 4.0 then
             declare
@@ -563,7 +672,16 @@ package body Session is
             L.Best_Time := L.Lap_Time;
          end if;
          L.Lap_Time := 0.0;
-         if Config.Mode = Race and then L.Lap >= Config.Laps and then not L.Finished then
+         --  Against the clock: once the time is up, the leader takes the flag
+         --  at the line, and everyone else at theirs after it
+         if Config.Mode = Race and then Config.Minutes > 0 and then not Flag_Out
+           and then Time >= Float (Config.Minutes) * 60.0 and then L.Position = 1
+         then
+            Flag_Out := True;
+         end if;
+         if Config.Mode = Race and then not L.Finished
+           and then (if Config.Minutes > 0 then Flag_Out else L.Lap >= Config.Laps)
+         then
             L.Finished := True;
             L.Finish_Time := Time + L.Penalty;
          end if;
@@ -618,10 +736,8 @@ package body Session is
       H := Arctan (S.TX, -S.TZ);
    end Grid_Slot;
 
-   --  Enough for that many laps, and a little over; what the tank takes
-   function Fuel_For_Laps (N : Natural) return Float is
-     (Float'Min (Vehicle.Tank,
-                 2.0 + Float (N) * 1.08 * Track.Length / 1000.0 * Vehicle.Fuel_Per_Km (Config.Kind)));
+
+   function Pit_Stops (I : Car_Index) return Natural is (AI (I).Stops);
 
    procedure Restart is
       Best_Keep : constant Float := Laps (1).Best_Time;
@@ -693,7 +809,24 @@ package body Session is
             end if;
          end;
       end loop;
-      Cars (1).Fuel := Fuel_For_Laps (Config.Laps);
+      Flag_Out := False;
+      if Config.Minutes > 0 then
+         --  The lap on the AI's line, a little slower
+         declare
+            Sum : Float := 0.0;
+         begin
+            for K in 0 .. Track.Count - 1 loop
+               Sum := Sum + Track.Spacing / Float'Max (5.0, Track.Samples (K).Line_V);
+            end loop;
+            Lap_Est := Sum * 1.08;
+         end;
+         --  Fuel for about half of it: everyone stops once at least
+         for I in 1 .. Car_Count loop
+            Cars (I).Fuel := Fuel_For_Laps (Natural'Max (1, Laps_To_Go (I) / 2));
+         end loop;
+      else
+         Cars (1).Fuel := Fuel_For_Laps (Config.Laps);
+      end if;
    end Restart;
 
    procedure Start (S : Settings) is
@@ -703,6 +836,12 @@ package body Session is
       if S.Mode in Hotlap | Stage then
          Config.Assist.Wear_Rate := 0.0;
          Config.Assist.Fuel_Use := False;
+         Config.Minutes := 0;
+      end if;
+      --  An endurance race is about the stops: fuel and tyres count
+      if Config.Mode = Race and then Config.Minutes > 0 then
+         Config.Assist.Fuel_Use := True;
+         Config.Assist.Wear_Rate := Float'Max (1.0, Config.Assist.Wear_Rate);
       end if;
       Spec := Spec_Of (S.Kind);
       Laps (1).Best_Time := 0.0;
@@ -799,8 +938,9 @@ package body Session is
             end loop;
             if Config.Assist.Fuel_Use then
                C.Fuel := Float'Max
-                 (C.Fuel, Fuel_For_Laps (Natural'Max (0, Config.Laps - Laps (1).Lap)));
+                 (C.Fuel, Fuel_For_Laps (Laps_To_Go (1)));
             end if;
+            AI (1).Stops := AI (1).Stops + 1;
          end if;
       elsif Tick mod 50 = 0 then
          declare
@@ -809,7 +949,7 @@ package body Session is
             Hint : Natural := C.Hint;
             Needed : constant Float :=
               (if Config.Assist.Fuel_Use
-               then Float'Max (0.0, Fuel_For_Laps (Natural'Max (0, Config.Laps - Laps (1).Lap)) - C.Fuel)
+               then Float'Max (0.0, Fuel_For_Laps (Laps_To_Go (1)) - C.Fuel)
                else 0.0);
             Broken : constant Float :=
               Float'Max (C.Dmg_Aero, Float'Max (C.Dmg_Engine, abs C.Toe / 0.07));
@@ -879,7 +1019,8 @@ package body Session is
 
    procedure Step (Player : Vehicle.Inputs) is
       Ai_Assists : constant Assists :=
-        (Abs_On => True, Tc_On => True, Mode => Automatic, Stunt => Stunt_Riders, others => <>);
+        (Abs_On => True, Tc_On => True, Mode => Automatic, Stunt => Stunt_Riders,
+         Fuel_Use => Config.Minutes > 0 and then Config.Mode = Race, others => <>);
       --  (Car 1 in the menu's demo keeps its wear switches, for the tests)
       Demo_Assists : constant Assists :=
         (Abs_On => True, Tc_On => True, Mode => Automatic,
@@ -956,6 +1097,12 @@ package body Session is
                              (Abs_On => Config.Assist.Abs_On, Tc_On => Config.Assist.Tc_On,
                               Mode => Automatic, Damage => Config.Assist.Damage, others => <>));
             end if;
+         end if;
+         if I = 1 and then Force_AI and then Fall_At > 0.0
+           and then Laps (1).Lap_Time >= Fall_At and then Vehicle.Is_Bike (Cars (1).Kind)
+         then
+            Cars (1).Fallen_T := Vehicle.Dt;
+            Fall_At := 0.0;
          end if;
          --  A rider down gets up after a while, back on the road
          if Cars (I).Fallen_T > Fall_Time and then I <= (if Config.Two_Players then 2 else 1) then

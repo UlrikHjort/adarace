@@ -13,6 +13,7 @@ with Ada.Numerics.Elementary_Functions;
 with Ada.Strings.Fixed;
 with Ada.Text_IO;
 
+with Career;
 with Championship;
 with Codriver;
 with Net;
@@ -327,6 +328,21 @@ procedure Simtest is
          Ride (Raw);
       end loop;
       Check (C.Fallen_T > 0.0, "a hard brake at full lean without ABS throws it down");
+      N := (others => <>);
+      for I in 1 .. 2000 loop
+         Ride (Raw);
+      end loop;
+      Check (C.Rider_Gap > 1.0 and then C.Rider_Vx < C.Vx + 0.01,
+             "the rider slides off behind the bike:" & Img (C.Rider_Gap) & " m");
+      --  Tyres warm with work, and cool in the air
+      Fresh (90.0);
+      N.Steer := 0.5;
+      N.Throttle := 0.3;
+      for I in 1 .. 20_000 loop
+         Ride (A);
+      end loop;
+      Check (C.Wheels (3).Temp > 75.0 and then C.Wheels (3).Temp < 110.0,
+             "hard cornering brings the tyres up to temperature:" & Img (C.Wheels (3).Temp) & " C");
 
       --  Full throttle in first without the anti-wheelie: the front comes up
       Fresh (90.0);
@@ -370,6 +386,89 @@ procedure Simtest is
    end Motorcycle;
 
    ---------------------------------------------------------------------------
+   --  An endurance race, against the clock: everyone stops for fuel
+
+   procedure Endurance is
+      R : Session.Settings := Hotlap (Road_GT);
+      N : Vehicle.Inputs;
+      VSC_Seen : Boolean := False;
+      Ran : Float := 0.0;
+   begin
+      Track.Load (1);
+      R.Mode := Session.Race;
+      R.Opponents := 3;
+      R.Minutes := 6;
+      R.AI_Skill := 0.95;
+      Session.Force_AI := True;
+      Session.Start (R);
+      for I in 1 .. 1_200_000 loop
+         Session.Step (N);
+         Ran := Float (I) / 1000.0;
+         VSC_Seen := VSC_Seen or else Session.VSC_On;
+         exit when (for all K in 1 .. Session.Car_Count => Session.Laps (K).Finished);
+      end loop;
+      Session.Force_AI := False;
+      for K in 1 .. Session.Car_Count loop
+         Put_Line ("    car" & K'Image & ": laps" & Session.Laps (K).Lap'Image & ", stops"
+                   & Session.Pit_Stops (K)'Image & ", finished at" & Img (Session.Laps (K).Finish_Time, 0)
+                   & " s, fuel" & Img (Session.Cars (K).Fuel) & " kg");
+      end loop;
+      Check ((for all K in 1 .. Session.Car_Count => Session.Laps (K).Finished),
+             "an endurance race ends for everyone (ran" & Img (Ran, 0) & " s)");
+      Check ((for all K in 1 .. Session.Car_Count =>
+                Session.Laps (K).Finish_Time >= 360.0 and then Session.Laps (K).Finish_Time < 360.0 + 200.0),
+             "the flag comes after the six minutes, a lap at most later");
+      Check ((for some K in 2 .. Session.Car_Count => Session.Pit_Stops (K) >= 1),
+             "the AI stops for fuel when it will not last");
+      Check ((for all K in 1 .. Session.Car_Count => Session.Cars (K).Fuel > 0.0),
+             "and nobody runs dry");
+      Check (not VSC_Seen, "a car in its pit box brings out no safety car");
+   end Endurance;
+
+   ---------------------------------------------------------------------------
+   --  A career: series after series, the top three opens the next
+
+   procedure Careers is
+      Opened : Boolean;
+   begin
+      Career.Forget;
+      Check (Career.Reached = 1, "a career starts in the first series");
+      for T in Career.Tier loop
+         declare
+            R : constant Career.Road_List := Career.Roads (T);
+            Good : Boolean := True;
+         begin
+            for K in R'Range loop
+               Good := Good and then not Track.Stage_Road (R (K))
+                 and then (K = R'First or else R (K) /= R (K - 1));
+            end loop;
+            Check (Good, Career.Series (T) & ": three circuits, on the " & Name (Career.Kind (T)));
+         end;
+      end loop;
+      Check (Track.Name (Career.Roads (1) (3)) = "Havnebyen (street circuit)"
+             and then Track.Name (Career.Roads (5) (1)) = "Storoe TT",
+             "the series find their circuits by name");
+      Career.Season_Over (1, 4, Opened);
+      Check (not Opened and then Career.Reached = 1, "fourth overall opens nothing");
+      Career.Season_Over (1, 2, Opened);
+      Check (Opened and then Career.Reached = 2, "second overall opens the next series");
+      Career.Season_Over (1, 1, Opened);
+      Check (not Opened and then Career.Reached = 2, "running an old series again opens nothing more");
+      Career.Forget;
+      Career.Load;
+      Check (Career.Reached = 2 and then Career.Best_Place (1) = 1
+             and then Career.Best_Place (2) = 0,
+             "the career is kept between sittings");
+      Check (Career.Skill (6) > Career.Skill (1), "the rivals get quicker on the way up");
+      Championship.Begin_Season (4, Championship.Road_Array (Career.Roads (2)));
+      Check (Championship.Round_Total = 3 and then Championship.Current_Road = Career.Roads (2) (1),
+             "a series is a championship at its own circuits");
+      Championship.Active := False;
+      Career.Forget;
+      Career.Save;
+   end Careers;
+
+   ---------------------------------------------------------------------------
 
    function Saved_By_Demo return Boolean is
      (Ada.Directories.Exists (Session.Save_Name));
@@ -411,13 +510,14 @@ procedure Simtest is
                if C.Impact > 1.0 then
                   Hits := Hits + 1;
                end if;
-               if C.Fallen_T > 0.0 and then not Was_Down then
-                  Falls := Falls + 1;
-                  Put_Line ("    fell at s=" & Img (Track.Samples (C.Hint).S, 0) & " v="
-                            & Img (C.Vx * 3.6, 0) & " lean=" & Img (C.Roll * 57.3, 0));
-               end if;
-               Was_Down := C.Fallen_T > 0.0;
             end if;
+            --  (a fall counts from the start, on the way to the line too)
+            if C.Fallen_T > 0.0 and then not Was_Down then
+               Falls := Falls + 1;
+               Put_Line ("    fell at s=" & Img (Track.Samples (C.Hint).S, 0) & " v="
+                         & Img (C.Vx * 3.6, 0) & " lean=" & Img (C.Roll * 57.3, 0));
+            end if;
+            Was_Down := C.Fallen_T > 0.0;
             Was_Off := Off;
          end;
          Laps_Done := Session.Laps (1).Lap;
@@ -598,6 +698,7 @@ procedure Simtest is
       Lap_T : Float;
       Lines : Natural := 0;
       Check_Grid : Boolean := False;
+      Marks, Mark_Line : Natural := 0;
    begin
       Track.Load (Track.Track_Id'First);
       Session.Start (S);
@@ -612,6 +713,9 @@ procedure Simtest is
             N.Throttle := 0.5;
          end if;
          if I mod 10 = 0 then
+            if I = 50_000 or else I = 90_000 then
+               Marks := Telemetry.Mark;   --  "this felt wrong"
+            end if;
             Telemetry.Sample (N, 0.1);
          end if;
          exit when Session.Laps (1).Lap >= 1;
@@ -628,13 +732,21 @@ procedure Simtest is
          begin
             Open (F, In_File, Telemetry.Last_File);
             while not End_Of_File (F) loop
-               Skip_Line (F);
-               Lines := Lines + 1;
+               declare
+                  L : constant String := Get_Line (F);
+               begin
+                  Lines := Lines + 1;
+                  if L'Length > 3 and then L (L'Last - 2 .. L'Last) = ", 2" then
+                     Mark_Line := Lines;
+                  end if;
+               end;
             end loop;
             Close (F);
          end;
       end if;
       Check (Lines > 5000, "the telemetry holds the lap:" & Lines'Image & " lines");
+      Check (Marks = 2 and then Mark_Line in 8000 .. 10000,
+             "a marked moment is found in it: mark 2 on line" & Mark_Line'Image);
       Session.Start (S);
       Check (abs (Session.Laps (1).Best_Time - Lap_T) < 0.001,
              "the best lap comes back at the next sitting");
@@ -1909,6 +2021,11 @@ begin
       Ada.Directories.Delete_Tree (Ada.Environment_Variables.Value ("HOME"));
    end if;
    --  ADARACE_ONLY=bike: just the motorcycle, while tuning it
+   if Ada.Environment_Variables.Value ("ADARACE_ONLY", "") = "endurance" then
+      Endurance;
+      Put_Line (if Failed = 0 then "All passed" else Failed'Image & " FAILED");
+      return;
+   end if;
    if Ada.Environment_Variables.Value ("ADARACE_ONLY", "") = "bike" then
       Straight (Sport_Bike);
       Motorcycle;
@@ -1919,6 +2036,22 @@ begin
       Put_Line (if Failed = 0 then "All passed" else Failed'Image & " FAILED");
       return;
    end if;
+   --  Every road in the folder loads (a bad one is left out with a message)
+   declare
+      use Ada.Directories;
+      Search : Search_Type;
+      Item : Directory_Entry_Type;
+      Files : Natural := 0;
+   begin
+      Start_Search (Search, "tracks", "*.track");
+      while More_Entries (Search) loop
+         Get_Next_Entry (Search, Item);
+         Files := Files + 1;
+      end loop;
+      End_Search (Search);
+      Check (Files = Track.Track_Count,
+             "every road in tracks/ loads:" & Track.Track_Count'Image & " of" & Files'Image);
+   end;
    for T in 1 .. Track.Track_Count loop
       Track_Shape (T);
    end loop;
@@ -1950,6 +2083,8 @@ begin
    Season;
    Two_Up;
    Characters;
+   Endurance;
+   Careers;
    Flags;
    Wire;
    Spoken_Notes;
