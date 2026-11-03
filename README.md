@@ -1,8 +1,8 @@
 # AdaRace
 
-A driving simulator in Ada and GtkAda, in the spirit of Assetto Corsa, made for
-a Logitech G29 (an Xbox controller or the keyboard work too): circuits and a rally stage, a
-motorcycle, a driving school, night, weather and seasons.
+A driving simulator in Ada and GtkAda, made for a Logitech G29 (an Xbox controller or the
+keyboard work too): circuits and rally stages, a motorcycle, a driving school, a career,
+night, weather and seasons.
 
 > **Built with AI.** Nearly all of this project was written by
 > [Claude](https://www.anthropic.com/claude) Opus 5.5, Anthropic's AI model, working in
