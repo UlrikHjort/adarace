@@ -358,12 +358,12 @@ package body Audio is
                   Uneven : constant Float :=
                     (case P.Engine is when V8 => 1.0, when V10 => 0.15, when Turbo_Four => 0.4, when Old_Four => 0.7, when Bike_Four => 0.05);
                   Hard : constant Float :=
-                    (case P.Engine is when V8 => 0.18, when V10 => 0.55, when Turbo_Four => 0.42, when Old_Four => 0.3, when Bike_Four => 0.65);
+                    (case P.Engine is when V8 => 0.10, when V10 => 0.32, when Turbo_Four => 0.25, when Old_Four => 0.18, when Bike_Four => 0.38);
                   Phase_Firing : constant Float := Crank * Fire;
                   Pulse : constant Float :=
                     Sin (Two_Pi * Phase_Firing)
                     + 0.55 * Sin (Two_Pi * Phase_Firing * 2.0 + 0.7)
-                    + 0.30 * Sin (Two_Pi * Phase_Firing * 3.0 + 1.9)
+                    + 0.22 * Sin (Two_Pi * Phase_Firing * 3.0 + 1.9)
                     + Hard * Sin (Two_Pi * Phase_Firing * 5.0)
                     + Uneven * 0.35 * Sin (Two_Pi * Crank * 2.0 + 0.3)
                     + Uneven * 0.22 * Sin (Two_Pi * Crank);
@@ -371,13 +371,14 @@ package body Audio is
                     1.0 + Uneven * 0.3 * Sin (Two_Pi * Crank) * (1.0 - Load_S * 0.6);
                   Rough : constant Float := White * (0.08 + 0.3 * Load_S);
                   Raw : constant Float := (Pulse * Lump + Rough * 1.2) * (0.25 + 0.75 * Load_S);
-                  --  The exhaust resonates; the note hardens with the revs
+                  --  The exhaust resonates; the note hardens with the revs (kept
+                  --  low and full: a high resonance soon sounds shrill)
                   Pitch : constant Float :=
-                    (case P.Engine is when V8 => 1.0, when V10 => 1.5, when Turbo_Four => 0.85, when Old_Four => 1.1, when Bike_Four => 1.75);
-                  Res1 : constant Float := Run (Exh1, Raw, (180.0 + Rpm_S * 0.05) * Pitch, 0.55);
-                  Res2 : constant Float := Run (Exh2, Raw, (700.0 + Rpm_S * 0.18) * Pitch, 0.75);
+                    (case P.Engine is when V8 => 0.9, when V10 => 1.2, when Turbo_Four => 0.8, when Old_Four => 1.0, when Bike_Four => 1.35);
+                  Res1 : constant Float := Run (Exh1, Raw, (130.0 + Rpm_S * 0.035) * Pitch, 0.55);
+                  Res2 : constant Float := Run (Exh2, Raw, (480.0 + Rpm_S * 0.12) * Pitch, 0.75);
                   Clip : constant Float :=
-                    (Res1 * 0.55 + Res2 * (0.15 + 0.3 * Load_S)) * 0.8;
+                    (Res1 * 0.62 + Res2 * (0.10 + 0.20 * Load_S)) * 0.85;
                   Eng : constant Float := Clip / (1.0 + abs Clip * 0.6);
                   Whine_S : constant Float :=
                     0.03 * Sin (Two_Pi * Whine) * Float'Min (1.0, Rpm_S / 6000.0);

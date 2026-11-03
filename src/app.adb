@@ -313,6 +313,15 @@ package body App is
    procedure Show_Track (T : Track.Track_Id) is
    begin
       Area.Make_Current;
+      --  Quiet while it is built: the window cannot tell the sound anything
+      --  meanwhile, so it would hold the last note (the next frame restores it)
+      declare
+         Hush : Audio.Params;
+      begin
+         Hush.Master := 0.0;
+         Hush.Load := 0.0;
+         Audio.Set (Hush);
+      end;
       Track.Load (T);
       Scenery.Build;
       Renderer.New_Track;
