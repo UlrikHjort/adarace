@@ -80,6 +80,13 @@ package body Gamepad is
    --  The axes: left stick across, the two triggers
    Stick_Lo, Stick_Hi : Float := -32768.0;
    LT_Lo, LT_Hi, RT_Lo, RT_Hi : Float := 0.0;
+   --  A trigger counts only once it has been seen at rest, at its lowest:
+   --  some joysticks call themselves controllers and have axes that rest in
+   --  the middle, which would be a trigger held half down all the time
+   LT_Armed, RT_Armed : Boolean := False;
+
+   function At_Rest (Raw, Low, High : Float) return Boolean is
+     (Raw <= Low + 0.05 * (High - Low));
 
    function Shape (Raw, Low, High : Float) return Float is
       Mid : constant Float := (Low + High) / 2.0;
@@ -105,6 +112,8 @@ package body Gamepad is
       end if;
       Fd := -1;
       Uploaded := False;
+      LT_Armed := False;
+      RT_Armed := False;
       Current := (others => <>);
       Pressed := (others => False);
    end Close;
@@ -156,9 +165,11 @@ package body Gamepad is
          Range_Of (0, Stick_Lo, Stick_Hi, Now);
          Current.Steer := Shape (Now, Stick_Lo, Stick_Hi);
          Range_Of (2, LT_Lo, LT_Hi, Now);
-         Current.Brake := Trigger (Now, LT_Lo, LT_Hi);
+         LT_Armed := At_Rest (Now, LT_Lo, LT_Hi);
+         Current.Brake := (if LT_Armed then Trigger (Now, LT_Lo, LT_Hi) else 0.0);
          Range_Of (5, RT_Lo, RT_Hi, Now);
-         Current.Throttle := Trigger (Now, RT_Lo, RT_Hi);
+         RT_Armed := At_Rest (Now, RT_Lo, RT_Hi);
+         Current.Throttle := (if RT_Armed then Trigger (Now, RT_Lo, RT_Hi) else 0.0);
       end;
       Effect.Id := -1;
       Effect.Length := 300;
@@ -246,8 +257,12 @@ package body Gamepad is
                if E.Kind = EV_ABS then
                   case E.Code is
                      when 0 => Current.Steer := Shape (Float (E.Value), Stick_Lo, Stick_Hi);
-                     when 2 => Current.Brake := Trigger (Float (E.Value), LT_Lo, LT_Hi);
-                     when 5 => Current.Throttle := Trigger (Float (E.Value), RT_Lo, RT_Hi);
+                     when 2 =>
+                        LT_Armed := LT_Armed or else At_Rest (Float (E.Value), LT_Lo, LT_Hi);
+                        Current.Brake := (if LT_Armed then Trigger (Float (E.Value), LT_Lo, LT_Hi) else 0.0);
+                     when 5 =>
+                        RT_Armed := RT_Armed or else At_Rest (Float (E.Value), RT_Lo, RT_Hi);
+                        Current.Throttle := (if RT_Armed then Trigger (Float (E.Value), RT_Lo, RT_Hi) else 0.0);
                      when 16#10# =>
                         Set (Wheel.Pad_Left, E.Value < 0);
                         Set (Wheel.Pad_Right, E.Value > 0);
